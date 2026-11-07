@@ -43,7 +43,7 @@ describe('ViaClient: pembacaan', () => {
 describe('ViaClient: keselamatan', () => {
   it('menolak perintah di luar daftar putih tanpa mengirimnya', async () => {
     const { client, dev } = setup();
-    for (const cmd of [0x03, 0x06, 0x0a, 0x0b, 0x0f, 0x10, 0x13, 0x15]) {
+    for (const cmd of [0x03, 0x06, 0x0a, 0x0b, 0x10, 0x13]) {
       await expect(client.request([cmd, 0, 0, 0])).rejects.toBeInstanceOf(ViaBlocked);
     }
     expect(dev.sent).toHaveLength(0);

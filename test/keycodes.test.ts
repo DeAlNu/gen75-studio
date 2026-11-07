@@ -113,6 +113,16 @@ describe('palet', () => {
     expect(cats.map((c) => c.id)).toEqual(['basic', 'nav', 'fkeys', 'mods', 'keypad', 'media', 'layer', 'device', 'light']);
   });
 
+  it('menambah kategori makro bila perangkat punya slot makro', () => {
+    const withMacros = paletteCategories(ctx, 4, 16);
+    expect(withMacros.map((c) => c.id)).toContain('macro');
+    const macro = withMacros.find((c) => c.id === 'macro')!;
+    expect(macro.items).toHaveLength(16);
+    expect(macro.items[0]).toMatchObject({ code: 0x7700, label: 'M0' });
+    expect(macro.items[15]).toMatchObject({ code: 0x770f, label: 'M15' });
+    expect(describeKeycode(0x770f, ctx).label).toBe('M15');
+  });
+
   it('keycode Gen 75 berurutan dari basis kustom', () => {
     const device = cats.find((c) => c.id === 'device')!;
     expect(device.items).toHaveLength(11);

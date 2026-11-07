@@ -1,3 +1,4 @@
+import { encoderCount } from './definition/layout';
 import { controlsOf } from './definition/menus';
 import type { DeviceDefinition } from './definition/types';
 import { hex4, isKnownRange } from './keycodes';
@@ -17,6 +18,10 @@ export interface Backup {
   };
   keymap: { layers: string[][] };
   lighting: LightingValues | null;
+  /** Isi buffer makro dalam heksadesimal, tanpa byte nol di ujung. Opsional pada backup lama. */
+  macros?: { count: number; bytes: string } | null;
+  /** Keycode putaran encoder: [layer][indeks][0 = berlawanan, 1 = searah]. Opsional pada backup lama. */
+  encoders?: string[][][] | null;
 }
 
 export interface KeyChange {
@@ -26,16 +31,41 @@ export interface KeyChange {
   to: number;
 }
 
+export interface EncoderChange {
+  layer: number;
+  index: number;
+  clockwise: boolean;
+  from: number;
+  to: number;
+}
+
 export interface LightingChange {
   id: string;
   to: LightingValue;
 }
 
-export function createBackup(
-  def: DeviceDefinition,
-  state: { protocolVersion: number; keymap: readonly Uint16Array[]; lighting: LightingValues | null },
-  now: Date = new Date(),
-): Backup {
+export interface BackupState {
+  protocolVersion: number;
+  keymap: readonly Uint16Array[];
+  lighting: LightingValues | null;
+  macroCount?: number;
+  macroBuffer?: Uint8Array | null;
+  encoders?: number[][][] | null;
+}
+
+export function macroBufferToHex(buffer: Uint8Array): string {
+  let end = buffer.length;
+  while (end > 0 && buffer[end - 1] === 0) end -= 1;
+  return Array.from(buffer.subarray(0, end), (b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+export function macroBufferFromHex(hex: string, size: number): Uint8Array {
+  const out = new Uint8Array(size);
+  for (let i = 0; i < hex.length / 2; i += 1) out[i] = Number.parseInt(hex.slice(i * 2, i * 2 + 2), 16);
+  return out;
+}
+
+export function createBackup(def: DeviceDefinition, state: BackupState, now: Date = new Date()): Backup {
   return {
     schemaVersion: 1,
     app: 'gen75-studio',
@@ -49,6 +79,8 @@ export function createBackup(
     },
     keymap: { layers: state.keymap.map((words) => Array.from(words, hex4)) },
     lighting: state.lighting ? JSON.parse(JSON.stringify(state.lighting)) : null,
+    macros: state.macroBuffer ? { count: state.macroCount ?? 0, bytes: macroBufferToHex(state.macroBuffer) } : null,
+    encoders: state.encoders ? state.encoders.map((layer) => layer.map((pair) => pair.map(hex4))) : null,
   };
 }
 
@@ -113,6 +145,31 @@ export function parseBackup(text: string, def: DeviceDefinition, maxLayers: numb
     }
   }
 
+  let macros: Backup['macros'] = null;
+  if (b.macros !== null && b.macros !== undefined) {
+    const m = b.macros as { count?: unknown; bytes?: unknown };
+    if (typeof m !== 'object' || !Number.isInteger(m.count) || (m.count as number) < 1) return fail('Bagian makro tidak valid.');
+    if (typeof m.bytes !== 'string' || !/^([0-9a-f]{2})*$/i.test(m.bytes)) return fail('Isi makro bukan heksadesimal yang valid.');
+    macros = { count: m.count as number, bytes: m.bytes.toLowerCase() };
+  }
+
+  let encoders: string[][][] | null = null;
+  if (b.encoders !== null && b.encoders !== undefined) {
+    const n = encoderCount(def);
+    const e = b.encoders;
+    if (!Array.isArray(e) || e.length < 1 || e.length > maxLayers) return fail('Bagian encoder tidak valid.');
+    for (let l = 0; l < e.length; l += 1) {
+      const layer = e[l];
+      if (!Array.isArray(layer) || layer.length !== n) return fail(`Encoder layer ${l} harus berisi ${n} encoder.`);
+      for (const pair of layer) {
+        if (!Array.isArray(pair) || pair.length !== 2 || !pair.every((v) => typeof v === 'string' && HEX.test(v) && isKnownRange(Number.parseInt(v, 16)))) {
+          return fail(`Keycode encoder pada layer ${l} tidak valid.`);
+        }
+      }
+    }
+    encoders = (e as string[][][]).map((layer) => layer.map((pair) => pair.map((v) => hex4(Number.parseInt(v, 16)))));
+  }
+
   return {
     ok: true,
     backup: {
@@ -128,12 +185,18 @@ export function parseBackup(text: string, def: DeviceDefinition, maxLayers: numb
       },
       keymap: { layers: (layers as string[][]).map((l) => l.map((v) => hex4(Number.parseInt(v, 16)))) },
       lighting,
+      macros,
+      encoders,
     },
   };
 }
 
 export function backupKeymap(backup: Backup): Uint16Array[] {
   return backup.keymap.layers.map((l) => Uint16Array.from(l, (v) => Number.parseInt(v, 16)));
+}
+
+export function backupEncoders(backup: Backup): number[][][] | null {
+  return backup.encoders ? backup.encoders.map((layer) => layer.map((pair) => pair.map((v) => Number.parseInt(v, 16)))) : null;
 }
 
 /** Perbedaan keymap pada posisi tombol yang didefinisikan; slot matriks kosong tidak disentuh. */
@@ -151,6 +214,20 @@ export function diffKeymap(def: DeviceDefinition, current: readonly Uint16Array[
   return changes;
 }
 
+export function diffEncoders(current: number[][][] | null, target: number[][][] | null): EncoderChange[] {
+  if (!current || !target) return [];
+  const changes: EncoderChange[] = [];
+  target.forEach((layer, l) =>
+    layer.forEach((pair, index) =>
+      pair.forEach((to, dir) => {
+        const from = current[l]?.[index]?.[dir];
+        if (from !== undefined && from !== to) changes.push({ layer: l, index, clockwise: dir === 1, from, to });
+      }),
+    ),
+  );
+  return changes;
+}
+
 const sameValue = (a: LightingValue | undefined, b: LightingValue): boolean => JSON.stringify(a) === JSON.stringify(b);
 
 export function diffLighting(current: LightingValues | null, target: LightingValues | null): LightingChange[] {
@@ -161,5 +238,5 @@ export function diffLighting(current: LightingValues | null, target: LightingVal
 }
 
 export function sameContent(a: Backup, b: Backup): boolean {
-  return JSON.stringify([a.keymap, a.lighting]) === JSON.stringify([b.keymap, b.lighting]);
+  return JSON.stringify([a.keymap, a.lighting, a.macros ?? null, a.encoders ?? null]) === JSON.stringify([b.keymap, b.lighting, b.macros ?? null, b.encoders ?? null]);
 }

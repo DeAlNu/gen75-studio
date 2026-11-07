@@ -210,7 +210,7 @@ function fromGroups(groups: BasicGroup[]): PaletteItem[] {
   }));
 }
 
-export function paletteCategories(ctx: KeycodeContext, layerCount: number): PaletteCategory[] {
+export function paletteCategories(ctx: KeycodeContext, layerCount: number, macroCount = 0): PaletteCategory[] {
   const layerItems: PaletteItem[] = fromGroups(['special']);
   for (let l = 0; l < layerCount; l += 1) {
     for (const f of LAYER_FUNCTIONS) {
@@ -226,6 +226,20 @@ export function paletteCategories(ctx: KeycodeContext, layerCount: number): Pale
     { id: 'keypad', label: 'Keypad', items: fromGroups(['keypad']) },
     { id: 'media', label: 'Media', items: fromGroups(['media']) },
     { id: 'layer', label: 'Layer', items: layerItems },
+    ...(macroCount > 0
+      ? [
+          {
+            id: 'macro',
+            label: 'Makro',
+            items: Array.from({ length: macroCount }, (_, i) => ({
+              code: Q.MACRO + i,
+              label: `M${i}`,
+              title: `Makro ${i}`,
+              verified: true,
+            })),
+          },
+        ]
+      : []),
     {
       id: 'device',
       label: 'Gen 75',

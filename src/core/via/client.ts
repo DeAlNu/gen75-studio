@@ -1,6 +1,6 @@
 import { REPORT_SIZE } from '../transport/types';
 import type { Transport } from '../transport/types';
-import { ALLOWED_COMMANDS, Cmd, WRITE_COMMANDS } from './commands';
+import { ALLOWED_COMMANDS, Cmd, KeyboardValue, WRITE_COMMANDS } from './commands';
 import { ViaBlocked, ViaDisconnected, ViaReadOnly, ViaTimeout, ViaUnhandled, ViaVerify } from './errors';
 
 export interface ClientOptions {
@@ -134,6 +134,54 @@ export class ViaClient {
     if (back !== code) {
       throw new ViaVerify(`verifikasi gagal di layer ${layer} (${row},${col}): ditulis 0x${code.toString(16)}, terbaca 0x${back.toString(16)}`);
     }
+  }
+
+  async getMacroCount(): Promise<number> {
+    const r = await this.request([Cmd.MacroCount]);
+    return r[1] as number;
+  }
+
+  async getMacroBufferSize(): Promise<number> {
+    const r = await this.request([Cmd.MacroBufferSize]);
+    return ((r[1] as number) << 8) | (r[2] as number);
+  }
+
+  async readMacroBuffer(size: number): Promise<Uint8Array> {
+    const out = new Uint8Array(size);
+    for (let off = 0; off < size; off += CHUNK) {
+      const n = Math.min(CHUNK, size - off);
+      const r = await this.request([Cmd.MacroGetBuffer, off >> 8, off & 0xff, n], { echo: 3 });
+      out.set(r.subarray(4, 4 + n), off);
+    }
+    return out;
+  }
+
+  async writeMacroBuffer(offset: number, bytes: Uint8Array): Promise<void> {
+    for (let i = 0; i < bytes.length; i += CHUNK) {
+      const part = bytes.subarray(i, i + CHUNK);
+      const off = offset + i;
+      await this.request([Cmd.MacroSetBuffer, off >> 8, off & 0xff, part.length, ...part], { echo: 3 });
+    }
+  }
+
+  async readEncoder(layer: number, index: number, clockwise: boolean): Promise<number> {
+    const r = await this.request([Cmd.GetEncoder, layer, index, clockwise ? 1 : 0], { echo: 3 });
+    return ((r[4] as number) << 8) | (r[5] as number);
+  }
+
+  /** Menulis keycode putaran encoder lalu membacanya kembali. */
+  async writeEncoder(layer: number, index: number, clockwise: boolean, code: number): Promise<void> {
+    if (!Number.isInteger(code) || code < 0 || code > 0xffff) throw new RangeError(`keycode di luar jangkauan: ${code}`);
+    await this.request([Cmd.SetEncoder, layer, index, clockwise ? 1 : 0, code >> 8, code & 0xff], { echo: 3 });
+    const back = await this.readEncoder(layer, index, clockwise);
+    if (back !== code) {
+      throw new ViaVerify(`verifikasi gagal pada encoder ${index} layer ${layer}: ditulis 0x${code.toString(16)}, terbaca 0x${back.toString(16)}`);
+    }
+  }
+
+  async readMatrixState(rows: number, cols: number): Promise<Uint8Array> {
+    const r = await this.request([Cmd.GetKeyboardValue, KeyboardValue.MatrixState], { echo: 1 });
+    return r.slice(2, 2 + rows * Math.ceil(cols / 8));
   }
 
   async customGet(channel: number, valueId: number, length: number): Promise<number[]> {

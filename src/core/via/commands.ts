@@ -23,6 +23,13 @@ export const Cmd = {
   Unhandled: 0xff,
 } as const;
 
+export const KeyboardValue = {
+  Uptime: 0x01,
+  LayoutOptions: 0x02,
+  MatrixState: 0x03,
+  FirmwareVersion: 0x04,
+} as const;
+
 export const Channel = {
   Custom: 0,
   Backlight: 1,
@@ -47,9 +54,16 @@ export const READ_COMMANDS: ReadonlySet<number> = new Set([
 ]);
 
 /**
- * Perintah tulis yang diizinkan di Fase 1: satu keycode, nilai lighting, dan
- * simpan lighting. Reset, bootloader, dan tulis buffer massal sengaja tidak ada.
+ * Perintah tulis yang diizinkan: satu keycode, nilai lighting, simpan lighting,
+ * isi buffer makro, dan keycode encoder. Reset, bootloader, dan tulis buffer
+ * keymap massal sengaja tidak ada.
  */
-export const WRITE_COMMANDS: ReadonlySet<number> = new Set([Cmd.SetKeycode, Cmd.CustomSet, Cmd.CustomSave]);
+export const WRITE_COMMANDS: ReadonlySet<number> = new Set([
+  Cmd.SetKeycode,
+  Cmd.CustomSet,
+  Cmd.CustomSave,
+  Cmd.MacroSetBuffer,
+  Cmd.SetEncoder,
+]);
 
 export const ALLOWED_COMMANDS: ReadonlySet<number> = new Set([...READ_COMMANDS, ...WRITE_COMMANDS]);

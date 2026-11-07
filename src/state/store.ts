@@ -1,26 +1,49 @@
 import { createStore } from 'zustand/vanilla';
-import { backupKeymap, createBackup, diffKeymap, diffLighting, parseBackup, sameContent } from '../core/backup';
-import type { Backup, KeyChange, LightingChange } from '../core/backup';
+import {
+  backupEncoders,
+  backupKeymap,
+  createBackup,
+  diffEncoders,
+  diffKeymap,
+  diffLighting,
+  macroBufferFromHex,
+  parseBackup,
+  sameContent,
+} from '../core/backup';
+import type { Backup, EncoderChange, KeyChange, LightingChange } from '../core/backup';
 import { controlsOf } from '../core/definition/menus';
 import type { DeviceDefinition } from '../core/definition/types';
 import { dangerOf, hex4, isKnownRange } from '../core/keycodes';
 import type { KeycodeContext } from '../core/keycodes';
+import { encodeMacroBuffer, MacroError } from '../core/macros';
+import type { MacroEntry } from '../core/macros';
+import { decodeMatrix } from '../core/matrix';
 import { DeviceSession, MAX_LAYERS } from '../core/session';
 import type { DeviceState, LightingValue, LightingValues } from '../core/session';
 import type { SnapshotReason, SnapshotStore, StoredSnapshot } from '../core/storage/snapshots';
 import type { Transport } from '../core/transport/types';
 import type { ClientOptions } from '../core/via/client';
+import { ViaUnhandled } from '../core/via/errors';
 
 export type Status = 'idle' | 'connecting' | 'ready' | 'disconnected' | 'error';
 
 export type AssignResult = { ok: true } | { ok: false; reason: 'danger' | 'error'; message: string };
+export type SaveResult = { ok: true } | { ok: false; message: string };
+export type MatrixResult = { ok: true; pressed: Set<string> } | { ok: false; message: string; unsupported: boolean };
+
+export type HistoryItem = ({ kind: 'key' } & KeyChange) | ({ kind: 'encoder' } & EncoderChange);
 
 export interface PreparedRestore {
   backup: Backup;
   keyChanges: KeyChange[];
+  encoderChanges: EncoderChange[];
   lightingChanges: LightingChange[];
+  /** Isi buffer makro yang akan ditulis, atau null bila makro tidak berubah. */
+  macroTarget: Uint8Array | null;
   dangerous: number;
   layers: number[];
+  /** Bagian backup yang dilewati karena perangkat tidak menyediakannya. */
+  skipped: string[];
 }
 
 export type PrepareResult = ({ ok: true } & PreparedRestore) | { ok: false; error: string };
@@ -38,10 +61,13 @@ export interface AppState {
   customBase: number;
   keymap: Uint16Array[];
   lighting: LightingValues | null;
+  macroCount: number;
+  macroBuffer: Uint8Array | null;
+  encoders: number[][][] | null;
   layer: number;
   selected: number[];
-  past: KeyChange[][];
-  future: KeyChange[][];
+  past: HistoryItem[][];
+  future: HistoryItem[][];
   busy: boolean;
   toast: string | null;
   snapshots: StoredSnapshot[];
@@ -54,10 +80,13 @@ export interface AppState {
   select(indices: number[]): void;
   toggleSelect(index: number): void;
   assignKeycode(code: number, opts?: { confirmed?: boolean }): Promise<AssignResult>;
+  assignEncoder(index: number, clockwise: boolean, code: number, opts?: { confirmed?: boolean }): Promise<AssignResult>;
   undo(): Promise<void>;
   redo(): Promise<void>;
   setLightingValue(id: string, value: LightingValue): void;
   flushLighting(): Promise<void>;
+  saveMacros(entries: MacroEntry[]): Promise<SaveResult>;
+  readMatrix(): Promise<MatrixResult>;
   exportBackup(): Backup | null;
   prepareRestore(text: string): PrepareResult;
   applyRestore(prepared: PreparedRestore, opts?: { confirmedDanger?: boolean }): Promise<RestoreResult>;
@@ -86,6 +115,8 @@ export function keycodeContext(def: DeviceDefinition, customBase: number): Keyco
 
 const message = (e: unknown): string => (e instanceof Error ? e.message : String(e));
 
+const sameBytes = (a: Uint8Array, b: Uint8Array): boolean => a.length === b.length && a.every((v, i) => v === b[i]);
+
 function withCode(keymap: Uint16Array[], layer: number, slot: number, code: number): Uint16Array[] {
   return keymap.map((words, i) => {
     if (i !== layer) return words;
@@ -95,9 +126,18 @@ function withCode(keymap: Uint16Array[], layer: number, slot: number, code: numb
   });
 }
 
+function withEncoder(encoders: number[][][] | null, layer: number, index: number, clockwise: boolean, code: number): number[][][] | null {
+  if (!encoders) return encoders;
+  return encoders.map((perLayer, l) =>
+    l !== layer ? perLayer : perLayer.map((pair, i) => (i !== index ? pair : pair.map((v, dir) => (dir === (clockwise ? 1 : 0) ? code : v)))),
+  );
+}
+
+const cloneEncoders = (e: number[][][] | null): number[][][] | null => (e ? e.map((l) => l.map((p) => [...p])) : null);
+
 export function createAppStore(deps: AppDeps) {
   const def = deps.definition;
-  const cols = def.matrix.cols;
+  const { rows, cols } = def.matrix;
   const controls = controlsOf(def.menus);
   const writeMs = deps.lightingWriteMs ?? 60;
   const commitMs = deps.lightingCommitMs ?? 1000;
@@ -126,7 +166,8 @@ export function createAppStore(deps: AppDeps) {
     const resync = async (): Promise<void> => {
       if (!session) return;
       try {
-        set({ keymap: await session.readKeymap() });
+        const st = await session.refresh();
+        set({ keymap: st.keymap.map((w) => w.slice()), macroBuffer: st.macroBuffer?.slice() ?? null, encoders: cloneEncoders(st.encoders) });
       } catch {
         /* perangkat mungkin terputus; status ditangani onClose */
       }
@@ -138,8 +179,11 @@ export function createAppStore(deps: AppDeps) {
       writable: s.writable,
       warnings: s.warnings,
       customBase: s.customBase,
-      keymap: s.keymap,
-      lighting: s.lighting,
+      keymap: s.keymap.map((w) => w.slice()),
+      lighting: s.lighting ? { ...s.lighting } : null,
+      macroCount: s.macroCount,
+      macroBuffer: s.macroBuffer?.slice() ?? null,
+      encoders: cloneEncoders(s.encoders),
     });
 
     const takeSnapshot = async (reason: SnapshotReason): Promise<void> => {
@@ -192,16 +236,22 @@ export function createAppStore(deps: AppDeps) {
       }
     };
 
-    const writeChanges = async (changes: KeyChange[], dir: 'from' | 'to'): Promise<KeyChange[]> => {
-      const done: KeyChange[] = [];
-      if (!session) return done;
-      for (const c of changes) {
-        const target = dir === 'to' ? c.to : c.from;
-        await session.setKeycode(c.layer, c.keyIndex, target);
-        set((s) => ({ keymap: withCode(s.keymap, c.layer, slotOf(c.keyIndex), target) }));
-        done.push(c);
+    const writeItems = async (items: HistoryItem[], dir: 'from' | 'to'): Promise<void> => {
+      if (!session) return;
+      for (const it of items) {
+        const target = dir === 'to' ? it.to : it.from;
+        if (it.kind === 'key') {
+          await session.setKeycode(it.layer, it.keyIndex, target);
+          set((s) => ({ keymap: withCode(s.keymap, it.layer, slotOf(it.keyIndex), target) }));
+        } else {
+          await session.setEncoder(it.layer, it.index, it.clockwise, target);
+          set((s) => ({ encoders: withEncoder(s.encoders, it.layer, it.index, it.clockwise, target) }));
+        }
       }
-      return done;
+    };
+
+    const pushHistory = (items: HistoryItem[]): void => {
+      if (items.length) set((st) => ({ past: [...st.past, items].slice(-HISTORY_LIMIT), future: [] }));
     };
 
     const runLightingWrites = async (): Promise<void> => {
@@ -219,10 +269,17 @@ export function createAppStore(deps: AppDeps) {
       if (!session) return;
       try {
         const values = await session.commitLighting();
-        set({ lighting: values });
+        set({ lighting: { ...values } });
       } catch (e) {
         notify(`Gagal menyimpan lighting: ${message(e)}`);
       }
+    };
+
+    const checkWrite = (code: number): AssignResult | null => {
+      const s = get();
+      if (s.status !== 'ready' || !s.writable) return { ok: false, reason: 'error', message: 'Perangkat dalam mode baca saja.' };
+      if (!isKnownRange(code)) return { ok: false, reason: 'error', message: `Keycode ${hex4(code)} di luar rentang yang dikenal.` };
+      return null;
     };
 
     return {
@@ -237,6 +294,9 @@ export function createAppStore(deps: AppDeps) {
       customBase: 0,
       keymap: [],
       lighting: null,
+      macroCount: 0,
+      macroBuffer: null,
+      encoders: null,
       layer: 0,
       selected: [],
       past: [],
@@ -283,7 +343,18 @@ export function createAppStore(deps: AppDeps) {
         const s = session;
         session = null;
         if (s) await s.close().catch(() => undefined);
-        set({ status: 'idle', keymap: [], lighting: null, selected: [], past: [], future: [], busy: false });
+        set({
+          status: 'idle',
+          keymap: [],
+          lighting: null,
+          macroBuffer: null,
+          macroCount: 0,
+          encoders: null,
+          selected: [],
+          past: [],
+          future: [],
+          busy: false,
+        });
       },
 
       setLayer(layer) {
@@ -300,34 +371,63 @@ export function createAppStore(deps: AppDeps) {
       },
 
       async assignKeycode(code, opts = {}) {
+        const refused = checkWrite(code);
+        if (refused) return refused;
         const s = get();
-        const fail = (reason: 'danger' | 'error', msg: string): AssignResult => ({ ok: false, reason, message: msg });
-        if (s.status !== 'ready' || !s.writable) return fail('error', 'Perangkat dalam mode baca saja.');
-        if (!isKnownRange(code)) return fail('error', `Keycode ${hex4(code)} di luar rentang yang dikenal.`);
         const danger = dangerOf(code, keycodeContext(def, s.customBase));
-        if (danger && !opts.confirmed) return fail('danger', danger.reason);
-        if (s.selected.length === 0) return fail('error', 'Pilih tombol di kanvas dulu.');
+        if (danger && !opts.confirmed) return { ok: false, reason: 'danger', message: danger.reason };
+        if (s.selected.length === 0) return { ok: false, reason: 'error', message: 'Pilih tombol di kanvas dulu.' };
 
         return enqueue(async (): Promise<AssignResult> => {
           const layer = get().layer;
-          const applied: KeyChange[] = [];
+          const applied: HistoryItem[] = [];
           set({ busy: true });
           try {
             for (const keyIndex of get().selected) {
               const from = get().keymap[layer]?.[slotOf(keyIndex)] ?? 0;
               if (from === code) continue;
-              const change: KeyChange = { layer, keyIndex, from, to: code };
-              await writeChanges([change], 'to');
-              applied.push(change);
+              const item: HistoryItem = { kind: 'key', layer, keyIndex, from, to: code };
+              await writeItems([item], 'to');
+              applied.push(item);
             }
-            if (applied.length) set((st) => ({ past: [...st.past, applied].slice(-HISTORY_LIMIT), future: [] }));
+            pushHistory(applied);
             return { ok: true };
           } catch (e) {
             await resync();
-            if (applied.length) set((st) => ({ past: [...st.past, applied].slice(-HISTORY_LIMIT), future: [] }));
+            pushHistory(applied);
             const msg = message(e);
             notify(`Gagal menulis keycode: ${msg}`);
-            return fail('error', msg);
+            return { ok: false, reason: 'error', message: msg };
+          } finally {
+            set({ busy: false });
+          }
+        });
+      },
+
+      async assignEncoder(index, clockwise, code, opts = {}) {
+        const refused = checkWrite(code);
+        if (refused) return refused;
+        const s = get();
+        if (!s.encoders) return { ok: false, reason: 'error', message: 'Putaran knob tidak tersedia pada perangkat ini.' };
+        const danger = dangerOf(code, keycodeContext(def, s.customBase));
+        if (danger && !opts.confirmed) return { ok: false, reason: 'danger', message: danger.reason };
+
+        return enqueue(async (): Promise<AssignResult> => {
+          const layer = get().layer;
+          const from = get().encoders?.[layer]?.[index]?.[clockwise ? 1 : 0];
+          if (from === undefined) return { ok: false, reason: 'error', message: 'Encoder tidak ditemukan.' };
+          if (from === code) return { ok: true };
+          set({ busy: true });
+          try {
+            const item: HistoryItem = { kind: 'encoder', layer, index, clockwise, from, to: code };
+            await writeItems([item], 'to');
+            pushHistory([item]);
+            return { ok: true };
+          } catch (e) {
+            await resync();
+            const msg = message(e);
+            notify(`Gagal menulis putaran knob: ${msg}`);
+            return { ok: false, reason: 'error', message: msg };
           } finally {
             set({ busy: false });
           }
@@ -341,7 +441,7 @@ export function createAppStore(deps: AppDeps) {
         await enqueue(async () => {
           set({ busy: true });
           try {
-            await writeChanges([...group].reverse(), 'from');
+            await writeItems([...group].reverse(), 'from');
             set((st) => ({ past: st.past.slice(0, -1), future: [...st.future, group], layer: group[0]?.layer ?? st.layer }));
           } catch (e) {
             await resync();
@@ -359,7 +459,7 @@ export function createAppStore(deps: AppDeps) {
         await enqueue(async () => {
           set({ busy: true });
           try {
-            await writeChanges(group, 'to');
+            await writeItems(group, 'to');
             set((st) => ({ future: st.future.slice(0, -1), past: [...st.past, group], layer: group[0]?.layer ?? st.layer }));
           } catch (e) {
             await resync();
@@ -398,6 +498,46 @@ export function createAppStore(deps: AppDeps) {
         if (hadCommit) await enqueue(runLightingCommit);
       },
 
+      async saveMacros(entries) {
+        const s = get();
+        if (s.status !== 'ready' || !s.writable) return { ok: false, message: 'Perangkat dalam mode baca saja.' };
+        const current = s.macroBuffer;
+        if (!current) return { ok: false, message: 'Makro tidak tersedia pada perangkat ini.' };
+        if (entries.length !== s.macroCount) return { ok: false, message: `Jumlah makro harus ${s.macroCount}.` };
+        let next: Uint8Array;
+        try {
+          next = encodeMacroBuffer(entries, current.length);
+        } catch (e) {
+          return { ok: false, message: e instanceof MacroError ? e.message : message(e) };
+        }
+        return enqueue(async (): Promise<SaveResult> => {
+          if (!session) return { ok: false, message: 'Tidak terhubung.' };
+          set({ busy: true });
+          try {
+            await session.saveMacroBuffer(next);
+            set({ macroBuffer: session.state?.macroBuffer?.slice() ?? null });
+            return { ok: true };
+          } catch (e) {
+            await resync();
+            const msg = message(e);
+            notify(`Gagal menyimpan makro: ${msg}`);
+            return { ok: false, message: msg };
+          } finally {
+            set({ busy: false });
+          }
+        });
+      },
+
+      async readMatrix() {
+        if (!session || get().status !== 'ready') return { ok: false, message: 'Tidak terhubung.', unsupported: false };
+        try {
+          const bytes = await session.client.readMatrixState(rows, cols);
+          return { ok: true, pressed: decodeMatrix(bytes, rows, cols) };
+        } catch (e) {
+          return { ok: false, message: message(e), unsupported: e instanceof ViaUnhandled };
+        }
+      },
+
       exportBackup() {
         const s = get();
         if (s.status !== 'ready' || s.keymap.length === 0) return null;
@@ -409,15 +549,45 @@ export function createAppStore(deps: AppDeps) {
         if (s.status !== 'ready') return { ok: false, error: 'Sambungkan keyboard dulu.' };
         const parsed = parseBackup(text, def, Math.min(s.layerCount, MAX_LAYERS));
         if (!parsed.ok) return parsed;
-        const keyChanges = diffKeymap(def, s.keymap, backupKeymap(parsed.backup));
+        const { backup } = parsed;
+        const skipped: string[] = [];
+
+        const keyChanges = diffKeymap(def, s.keymap, backupKeymap(backup));
+
+        let encoderChanges: EncoderChange[] = [];
+        if (backup.encoders) {
+          if (!s.encoders) skipped.push('Putaran knob dalam backup dilewati karena perangkat ini tidak menyediakannya.');
+          else encoderChanges = diffEncoders(s.encoders, backupEncoders(backup));
+        }
+
+        let macroTarget: Uint8Array | null = null;
+        if (backup.macros) {
+          const current = s.macroBuffer;
+          if (!current) {
+            skipped.push('Makro dalam backup dilewati karena perangkat ini tidak menyediakannya.');
+          } else if (backup.macros.count !== s.macroCount) {
+            return { ok: false, error: `Jumlah slot makro backup (${backup.macros.count}) berbeda dari perangkat (${s.macroCount}).` };
+          } else if (backup.macros.bytes.length / 2 > current.length) {
+            return { ok: false, error: 'Isi makro backup lebih besar dari memori makro perangkat.' };
+          } else {
+            const target = macroBufferFromHex(backup.macros.bytes, current.length);
+            if (!sameBytes(target, current)) macroTarget = target;
+          }
+        }
+
         const ctx = keycodeContext(def, s.customBase);
+        const dangerous =
+          keyChanges.filter((c) => dangerOf(c.to, ctx) !== null).length + encoderChanges.filter((c) => dangerOf(c.to, ctx) !== null).length;
         return {
           ok: true,
-          backup: parsed.backup,
+          backup,
           keyChanges,
-          lightingChanges: diffLighting(s.lighting, parsed.backup.lighting),
-          dangerous: keyChanges.filter((c) => dangerOf(c.to, ctx) !== null).length,
-          layers: [...new Set(keyChanges.map((c) => c.layer))].sort((a, b) => a - b),
+          encoderChanges,
+          lightingChanges: diffLighting(s.lighting, backup.lighting),
+          macroTarget,
+          dangerous,
+          layers: [...new Set([...keyChanges.map((c) => c.layer), ...encoderChanges.map((c) => c.layer)])].sort((a, b) => a - b),
+          skipped,
         };
       },
 
@@ -434,16 +604,26 @@ export function createAppStore(deps: AppDeps) {
             await takeSnapshot('before-restore');
             let applied = 0;
             for (const c of prepared.keyChanges) {
-              await writeChanges([c], 'to');
+              await writeItems([{ kind: 'key', ...c }], 'to');
+              applied += 1;
+            }
+            for (const c of prepared.encoderChanges) {
+              await writeItems([{ kind: 'encoder', ...c }], 'to');
+              applied += 1;
+            }
+            if (prepared.macroTarget && session) {
+              await session.saveMacroBuffer(prepared.macroTarget);
               applied += 1;
             }
             if (prepared.lightingChanges.length > 0 && session) {
               for (const c of prepared.lightingChanges) await session.setLighting(c.id, c.to);
-              set({ lighting: await session.commitLighting() });
+              set({ lighting: { ...(await session.commitLighting()) } });
             }
             await resync();
-            const target = backupKeymap(prepared.backup);
-            const mismatches = diffKeymap(def, get().keymap, target).length;
+            const after = get();
+            let mismatches = diffKeymap(def, after.keymap, backupKeymap(prepared.backup)).length;
+            mismatches += diffEncoders(after.encoders, backupEncoders(prepared.backup)).length;
+            if (prepared.macroTarget && (!after.macroBuffer || !sameBytes(after.macroBuffer, prepared.macroTarget))) mismatches += 1;
             set({ past: [], future: [] });
             return { ok: true, applied, mismatches };
           } catch (e) {
