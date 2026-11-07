@@ -1,0 +1,14 @@
+# berkas milik pabrikan, tidak ikut ke repo
+gen75.bin
+*.bin
+GEN 75 (1).JSON
+
+# lokal
+.claude/
+CLAUDE.md
+.vscode/
+.idea/
+node_modules/
+*.log
+.DS_Store
+Thumbs.db
