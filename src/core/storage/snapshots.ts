@@ -1,4 +1,5 @@
 import type { Backup } from '../backup';
+import { objectStore, request } from './db';
 
 export type SnapshotReason = 'connect' | 'manual' | 'before-restore';
 
@@ -39,44 +40,18 @@ export class MemorySnapshotStore implements SnapshotStore {
   }
 }
 
-const DB_NAME = 'gen75-studio';
-const STORE = 'snapshots';
-
-function request<T>(req: IDBRequest<T>): Promise<T> {
-  return new Promise((resolve, reject) => {
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error);
-  });
-}
-
 export class IndexedDbSnapshotStore implements SnapshotStore {
-  private dbPromise: Promise<IDBDatabase> | null = null;
-
-  private db(): Promise<IDBDatabase> {
-    this.dbPromise ??= new Promise((resolve, reject) => {
-      const open = indexedDB.open(DB_NAME, 1);
-      open.onupgradeneeded = () => open.result.createObjectStore(STORE, { keyPath: 'id' });
-      open.onsuccess = () => resolve(open.result);
-      open.onerror = () => reject(open.error);
-    });
-    return this.dbPromise;
-  }
-
-  private async store(mode: IDBTransactionMode): Promise<IDBObjectStore> {
-    return (await this.db()).transaction(STORE, mode).objectStore(STORE);
-  }
-
   async list(): Promise<StoredSnapshot[]> {
-    const all = await request((await this.store('readonly')).getAll() as IDBRequest<StoredSnapshot[]>);
+    const all = await request((await objectStore('snapshots', 'readonly')).getAll() as IDBRequest<StoredSnapshot[]>);
     return all.sort(byNewest);
   }
 
   async add(snapshot: StoredSnapshot): Promise<void> {
-    await request((await this.store('readwrite')).put(snapshot));
+    await request((await objectStore('snapshots', 'readwrite')).put(snapshot));
   }
 
   async remove(id: string): Promise<void> {
-    await request((await this.store('readwrite')).delete(id));
+    await request((await objectStore('snapshots', 'readwrite')).delete(id));
   }
 
   async prune(max: number): Promise<void> {

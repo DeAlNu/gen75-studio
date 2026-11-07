@@ -1,5 +1,6 @@
 import { useStore } from 'zustand';
 import { gen75 } from '../core/definition';
+import { createProfileStore } from '../core/storage/profiles';
 import { createSnapshotStore } from '../core/storage/snapshots';
 import { findPairedWebHid, requestWebHid } from '../core/transport/webhid';
 import { createAppStore } from './store';
@@ -10,6 +11,7 @@ export const definition = gen75;
 export const appStore = createAppStore({
   definition,
   snapshots: createSnapshotStore(),
+  profiles: createProfileStore(),
   openWebHid: () => requestWebHid(definition),
   findPaired: () => findPairedWebHid(definition),
   openMock: async () => {

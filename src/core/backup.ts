@@ -237,6 +237,12 @@ export function diffLighting(current: LightingValues | null, target: LightingVal
     .map(([id, to]) => ({ id, to }));
 }
 
+/** Urutan kunci lighting tidak berpengaruh pada kesamaan isi. */
+const sortedLighting = (l: LightingValues | null): [string, LightingValue][] | null => (l ? Object.entries(l).sort(([x], [y]) => (x < y ? -1 : x > y ? 1 : 0)) : null);
+
 export function sameContent(a: Backup, b: Backup): boolean {
-  return JSON.stringify([a.keymap, a.lighting, a.macros ?? null, a.encoders ?? null]) === JSON.stringify([b.keymap, b.lighting, b.macros ?? null, b.encoders ?? null]);
+  return (
+    JSON.stringify([a.keymap, sortedLighting(a.lighting), a.macros ?? null, a.encoders ?? null]) ===
+    JSON.stringify([b.keymap, sortedLighting(b.lighting), b.macros ?? null, b.encoders ?? null])
+  );
 }

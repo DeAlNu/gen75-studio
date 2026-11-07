@@ -18,8 +18,12 @@ import type { KeycodeContext } from '../core/keycodes';
 import { encodeMacroBuffer, MacroError } from '../core/macros';
 import type { MacroEntry } from '../core/macros';
 import { decodeMatrix } from '../core/matrix';
+import { cleanName, checkProfileName, createProfile, NOTE_MAX, parseProfileFile, PROFILE_LIMIT, profileToFile, uniqueName } from '../core/profiles';
+import type { Profile, ProfileFile } from '../core/profiles';
 import { DeviceSession, MAX_LAYERS } from '../core/session';
 import type { DeviceState, LightingValue, LightingValues } from '../core/session';
+import { MemoryProfileStore } from '../core/storage/profiles';
+import type { ProfileStore } from '../core/storage/profiles';
 import type { SnapshotReason, SnapshotStore, StoredSnapshot } from '../core/storage/snapshots';
 import type { Transport } from '../core/transport/types';
 import type { ClientOptions } from '../core/via/client';
@@ -33,8 +37,21 @@ export type MatrixResult = { ok: true; pressed: Set<string> } | { ok: false; mes
 
 export type HistoryItem = ({ kind: 'key' } & KeyChange) | ({ kind: 'encoder' } & EncoderChange);
 
+/** Bagian backup atau profil yang ikut ditulis ke keyboard. */
+export interface RestoreParts {
+  keymap: boolean;
+  encoders: boolean;
+  macros: boolean;
+  lighting: boolean;
+}
+
+export const ALL_PARTS: RestoreParts = { keymap: true, encoders: true, macros: true, lighting: true };
+
+export type ProfileResult = { ok: true; profile: Profile } | { ok: false; message: string };
+
 export interface PreparedRestore {
   backup: Backup;
+  parts: RestoreParts;
   keyChanges: KeyChange[];
   encoderChanges: EncoderChange[];
   lightingChanges: LightingChange[];
@@ -71,7 +88,11 @@ export interface AppState {
   busy: boolean;
   toast: string | null;
   snapshots: StoredSnapshot[];
+  profiles: Profile[];
+  /** Profil yang terakhir diterapkan atau disimpan pada sambungan ini. */
+  lastProfileId: string | null;
 
+  loadStored(): Promise<void>;
   tryAutoConnect(): Promise<void>;
   connectWebHid(): Promise<void>;
   connectMock(): Promise<void>;
@@ -88,16 +109,25 @@ export interface AppState {
   saveMacros(entries: MacroEntry[]): Promise<SaveResult>;
   readMatrix(): Promise<MatrixResult>;
   exportBackup(): Backup | null;
-  prepareRestore(text: string): PrepareResult;
+  prepareRestore(text: string, parts?: RestoreParts): PrepareResult;
   applyRestore(prepared: PreparedRestore, opts?: { confirmedDanger?: boolean }): Promise<RestoreResult>;
   takeSnapshot(reason: SnapshotReason): Promise<void>;
   deleteSnapshot(id: string): Promise<void>;
+  saveProfile(name: string, note: string): Promise<ProfileResult>;
+  overwriteProfile(id: string): Promise<ProfileResult>;
+  editProfile(id: string, name: string, note: string): Promise<ProfileResult>;
+  deleteProfile(id: string): Promise<void>;
+  importProfile(text: string, fallbackName: string): Promise<ProfileResult>;
+  exportProfile(id: string): ProfileFile | null;
+  setLastProfile(id: string | null): void;
   clearToast(): void;
 }
 
 export interface AppDeps {
   definition: DeviceDefinition;
   snapshots: SnapshotStore;
+  /** Penyimpanan profil; bila tidak diberikan, profil hanya hidup selama sesi. */
+  profiles?: ProfileStore;
   openWebHid: () => Promise<Transport | null>;
   findPaired: () => Promise<Transport | null>;
   openMock: () => Promise<Transport>;
@@ -141,6 +171,7 @@ export function createAppStore(deps: AppDeps) {
   const controls = controlsOf(def.menus);
   const writeMs = deps.lightingWriteMs ?? 60;
   const commitMs = deps.lightingCommitMs ?? 1000;
+  const profileStore = deps.profiles ?? new MemoryProfileStore();
 
   let session: DeviceSession | null = null;
   let queue: Promise<unknown> = Promise.resolve();
@@ -226,6 +257,7 @@ export function createAppStore(deps: AppDeps) {
           past: [],
           future: [],
           busy: false,
+          lastProfileId: null,
         });
         await takeSnapshot('connect');
       } catch (e) {
@@ -304,6 +336,13 @@ export function createAppStore(deps: AppDeps) {
       busy: false,
       toast: null,
       snapshots: [],
+      profiles: [],
+      lastProfileId: null,
+
+      async loadStored() {
+        const [snapshots, profiles] = await Promise.all([deps.snapshots.list().catch(() => []), profileStore.list().catch(() => [])]);
+        set({ snapshots, profiles });
+      },
 
       async tryAutoConnect() {
         const st = get().status;
@@ -314,7 +353,7 @@ export function createAppStore(deps: AppDeps) {
         } catch {
           /* tanpa izin sebelumnya: biarkan pengguna menekan Sambungkan */
         }
-        set({ snapshots: await deps.snapshots.list().catch(() => []) });
+        await get().loadStored();
       },
 
       async connectWebHid() {
@@ -354,6 +393,7 @@ export function createAppStore(deps: AppDeps) {
           past: [],
           future: [],
           busy: false,
+          lastProfileId: null,
         });
       },
 
@@ -544,7 +584,7 @@ export function createAppStore(deps: AppDeps) {
         return createBackup(def, s);
       },
 
-      prepareRestore(text) {
+      prepareRestore(text, parts = ALL_PARTS) {
         const s = get();
         if (s.status !== 'ready') return { ok: false, error: 'Sambungkan keyboard dulu.' };
         const parsed = parseBackup(text, def, Math.min(s.layerCount, MAX_LAYERS));
@@ -552,16 +592,16 @@ export function createAppStore(deps: AppDeps) {
         const { backup } = parsed;
         const skipped: string[] = [];
 
-        const keyChanges = diffKeymap(def, s.keymap, backupKeymap(backup));
+        const keyChanges = parts.keymap ? diffKeymap(def, s.keymap, backupKeymap(backup)) : [];
 
         let encoderChanges: EncoderChange[] = [];
-        if (backup.encoders) {
+        if (parts.encoders && backup.encoders) {
           if (!s.encoders) skipped.push('Putaran knob dalam backup dilewati karena perangkat ini tidak menyediakannya.');
           else encoderChanges = diffEncoders(s.encoders, backupEncoders(backup));
         }
 
         let macroTarget: Uint8Array | null = null;
-        if (backup.macros) {
+        if (parts.macros && backup.macros) {
           const current = s.macroBuffer;
           if (!current) {
             skipped.push('Makro dalam backup dilewati karena perangkat ini tidak menyediakannya.');
@@ -581,9 +621,10 @@ export function createAppStore(deps: AppDeps) {
         return {
           ok: true,
           backup,
+          parts,
           keyChanges,
           encoderChanges,
-          lightingChanges: diffLighting(s.lighting, backup.lighting),
+          lightingChanges: parts.lighting ? diffLighting(s.lighting, backup.lighting) : [],
           macroTarget,
           dangerous,
           layers: [...new Set([...keyChanges.map((c) => c.layer), ...encoderChanges.map((c) => c.layer)])].sort((a, b) => a - b),
@@ -621,8 +662,8 @@ export function createAppStore(deps: AppDeps) {
             }
             await resync();
             const after = get();
-            let mismatches = diffKeymap(def, after.keymap, backupKeymap(prepared.backup)).length;
-            mismatches += diffEncoders(after.encoders, backupEncoders(prepared.backup)).length;
+            let mismatches = prepared.parts.keymap ? diffKeymap(def, after.keymap, backupKeymap(prepared.backup)).length : 0;
+            if (prepared.parts.encoders) mismatches += diffEncoders(after.encoders, backupEncoders(prepared.backup)).length;
             if (prepared.macroTarget && (!after.macroBuffer || !sameBytes(after.macroBuffer, prepared.macroTarget))) mismatches += 1;
             set({ past: [], future: [] });
             return { ok: true, applied, mismatches };
@@ -642,6 +683,84 @@ export function createAppStore(deps: AppDeps) {
       async deleteSnapshot(id) {
         await deps.snapshots.remove(id);
         set({ snapshots: await deps.snapshots.list() });
+      },
+
+      async saveProfile(name, note) {
+        const s = get();
+        if (s.status !== 'ready' || s.keymap.length === 0) return { ok: false, message: 'Sambungkan keyboard dulu untuk menyimpan profil.' };
+        if (s.profiles.length >= PROFILE_LIMIT) return { ok: false, message: `Batas ${PROFILE_LIMIT} profil tercapai. Hapus salah satu dulu.` };
+        const bad = checkProfileName(name, s.profiles);
+        if (bad) return { ok: false, message: bad };
+        try {
+          const profile = createProfile(name, note, createBackup(def, s));
+          await profileStore.put(profile);
+          set({ profiles: await profileStore.list(), lastProfileId: profile.id });
+          return { ok: true, profile };
+        } catch (e) {
+          return { ok: false, message: `Gagal menyimpan profil: ${message(e)}` };
+        }
+      },
+
+      async overwriteProfile(id) {
+        const s = get();
+        const old = s.profiles.find((p) => p.id === id);
+        if (!old) return { ok: false, message: 'Profil tidak ditemukan.' };
+        if (s.status !== 'ready' || s.keymap.length === 0) return { ok: false, message: 'Sambungkan keyboard dulu.' };
+        try {
+          const profile: Profile = { ...old, updatedAt: new Date().toISOString(), backup: createBackup(def, s) };
+          await profileStore.put(profile);
+          set({ profiles: await profileStore.list(), lastProfileId: profile.id });
+          return { ok: true, profile };
+        } catch (e) {
+          return { ok: false, message: `Gagal memperbarui profil: ${message(e)}` };
+        }
+      },
+
+      async editProfile(id, name, note) {
+        const s = get();
+        const old = s.profiles.find((p) => p.id === id);
+        if (!old) return { ok: false, message: 'Profil tidak ditemukan.' };
+        const bad = checkProfileName(name, s.profiles, id);
+        if (bad) return { ok: false, message: bad };
+        try {
+          const profile: Profile = { ...old, name: cleanName(name), note: note.trim().slice(0, NOTE_MAX), updatedAt: new Date().toISOString() };
+          await profileStore.put(profile);
+          set({ profiles: await profileStore.list() });
+          return { ok: true, profile };
+        } catch (e) {
+          return { ok: false, message: `Gagal mengubah profil: ${message(e)}` };
+        }
+      },
+
+      async deleteProfile(id) {
+        await profileStore.remove(id);
+        set((st) => ({ lastProfileId: st.lastProfileId === id ? null : st.lastProfileId }));
+        set({ profiles: await profileStore.list() });
+      },
+
+      async importProfile(text, fallbackName) {
+        const s = get();
+        if (s.profiles.length >= PROFILE_LIMIT) return { ok: false, message: `Batas ${PROFILE_LIMIT} profil tercapai. Hapus salah satu dulu.` };
+        const maxLayers = s.status === 'ready' ? Math.min(s.layerCount, MAX_LAYERS) : MAX_LAYERS;
+        const parsed = parseProfileFile(text, def, maxLayers, fallbackName);
+        if (!parsed.ok) return { ok: false, message: parsed.error };
+        try {
+          const profile = createProfile(uniqueName(parsed.name, s.profiles), parsed.note, parsed.backup);
+          await profileStore.put(profile);
+          set({ profiles: await profileStore.list() });
+          return { ok: true, profile };
+        } catch (e) {
+          return { ok: false, message: `Gagal menyimpan profil: ${message(e)}` };
+        }
+      },
+
+      exportProfile(id) {
+        const p = get().profiles.find((x) => x.id === id);
+        return p ? profileToFile(p) : null;
+      },
+
+      setLastProfile(id) {
+        set({ lastProfileId: id });
       },
 
       clearToast() {
