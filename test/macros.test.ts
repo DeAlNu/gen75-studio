@@ -139,6 +139,13 @@ describe('buffer makro', () => {
     expect(() => encodeMacroBuffer(sample(), 7)).toThrow(/penuh/);
   });
 
+  it('tidak melempar galat saat menghitung entri yang tidak valid', () => {
+    const invalid: MacroEntry = { kind: 'actions', actions: [{ kind: 'delay', ms: 0 }] };
+    expect(() => macroUsage([invalid, ...sample()], 16)).not.toThrow();
+    expect(macroUsage([invalid, ...sample()], 16).used).toBe(macroUsage(sample(), 16).used + 1);
+    expect(() => encodeMacroBuffer([invalid], 16)).toThrow(MacroError);
+  });
+
   it('memvalidasi entri', () => {
     expect(validateEntry({ kind: 'actions', actions: [{ kind: 'tap', keycode: 6 }] })).toBeNull();
     expect(validateEntry({ kind: 'actions', actions: [{ kind: 'delay', ms: 0 }] })).toMatch(/jeda/);

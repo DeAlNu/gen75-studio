@@ -116,9 +116,18 @@ export function parseMacroBuffer(buffer: Uint8Array, count: number): MacroEntry[
   return entries;
 }
 
+/** Panjang byte sebuah entri; entri yang tidak valid dihitung 0 karena tidak bisa ditulis. */
+function entryLength(e: MacroEntry): number {
+  try {
+    return serializeEntry(e).length;
+  } catch {
+    return 0;
+  }
+}
+
 /** Byte yang terpakai: isi semua makro ditambah pemisah antar makro. */
 export function macroUsage(entries: readonly MacroEntry[], size: number): { used: number; size: number; fits: boolean } {
-  const used = entries.reduce((a, e) => a + serializeEntry(e).length, 0) + Math.max(0, entries.length - 1);
+  const used = entries.reduce((a, e) => a + entryLength(e), 0) + Math.max(0, entries.length - 1);
   // satu byte nol di ujung dipertahankan sebagai penutup makro terakhir
   return { used, size, fits: used + 1 <= size };
 }
