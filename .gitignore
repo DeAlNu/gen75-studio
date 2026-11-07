@@ -9,6 +9,8 @@ CLAUDE.md
 .vscode/
 .idea/
 node_modules/
+dist/
+coverage/
 *.log
 .DS_Store
 Thumbs.db
