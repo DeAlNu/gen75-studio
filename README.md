@@ -7,13 +7,17 @@ Proyek pribadi, belum ada rilis. Bukan produk resmi pabrikan.
 ## Fitur saat ini
 
 - Sambung lewat WebHID (Chrome atau Edge), sambung otomatis bila perangkat sudah pernah diizinkan.
-- Keymap semua layer: kanvas dari definisi, pilih satu atau beberapa tombol, palet keycode dengan pencarian dan kolom keycode bebas, undo dan redo.
-- Lighting: menu dibangun dari definisi perangkat (brightness, efek, kecepatan, warna), disimpan ke keyboard setelah berhenti digeser.
-- Backup berkas JSON dan snapshot otomatis di browser; pemulihan menampilkan ringkasan perubahan dulu.
+- **Keymap** semua layer: kanvas dari definisi, pilih satu atau beberapa tombol, palet keycode dengan pencarian dan kolom keycode bebas, undo dan redo.
+- **Putaran knob**: keycode searah dan berlawanan jarum jam per layer, bila firmware mendukung encoder map.
+- **Fungsi Gen 75**: sebelas keycode khas papan ini (mode koneksi, Win-lock, dan lainnya) dengan penjelasan, dipasang ke tombol lewat satu klik.
+- **Makro**: editor aksi (ketuk, tahan, lepas, jeda, teks), perekam dari keyboard, indikator memori, draf yang disimpan sekaligus dan diverifikasi.
+- **Tester**: membaca keadaan matriks langsung dari keyboard (termasuk Fn dan knob), dengan cadangan lewat event browser.
+- **Lighting**: menu dibangun dari definisi perangkat (brightness, efek, kecepatan, warna), disimpan ke keyboard setelah berhenti digeser.
+- **Backup** berkas JSON (keymap, knob, makro, lighting) dan snapshot otomatis di browser; pemulihan menampilkan ringkasan perubahan dulu.
 - Keselamatan: mode baca saja untuk protokol di bawah 12, daftar putih perintah HID, verifikasi baca-ulang setiap tulis, konfirmasi untuk keycode berisiko.
 - Mode simulasi untuk mencoba tanpa keyboard.
 
-Belum ada: makro, tester, panel fungsi Gen 75, profil, pembaruan firmware. Urutannya ada di peta jalan `RANCANGAN.md`.
+Belum ada: profil bernama, impor dan ekspor format VIA, bahasa Inggris, mode offline (PWA), pembaruan firmware. Urutannya ada di peta jalan `RANCANGAN.md`.
 
 ## Menjalankan
 
@@ -49,6 +53,7 @@ Berkas firmware pabrikan (`gen75.bin`) sengaja tidak disertakan.
 
 ## Status
 
-- Inti protokol, store, dan UI sudah jalan dan diuji dengan perangkat simulasi: 93 tes unit, typecheck, build produksi, dan uji manual di browser.
+- Inti protokol, store, dan UI sudah jalan dan diuji dengan perangkat simulasi: tes unit, typecheck, build produksi, dan uji manual di browser.
 - Belum pernah dijalankan pada keyboard fisik. Jalankan `tools/probe/` lebih dulu untuk memastikan firmware menjawab sesuai dugaan sebelum menulis apa pun lewat aplikasi ini.
 - Penulisan hanya dibuka untuk protokol VIA 12 ke atas.
+- Format makro mengikuti dugaan dari QMK dan belum dibandingkan dengan makro buatan VIA pada perangkat nyata.

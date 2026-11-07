@@ -327,6 +327,8 @@ gen75-studio/
 
 - Format mengikuti makro `dynamic_keymap` QMK: urutan aksi dipisah byte `0x00`; aksi diawali prefix `0x01` dengan kode tap/down/up/delay. Buat satu makro di VIA, baca buffer, ubah lewat app, tulis, lalu baca lagi; hasilnya harus identik byte-per-byte sebelum fitur dirilis.
 - Jumlah slot dan ukuran buffer dibaca dari `0x0C` dan `0x0D`; jangan diasumsikan.
+- Editor di app hanya memakai subset yang paling umum: ketuk, tahan, dan lepas dengan keycode 8-bit (`0x01 0x01|0x02|0x03 kc`), jeda desimal (`0x01 0x04 angka... |`), dan teks ASCII `0x20-0x7E`. Urutan lain (mis. keycode 16-bit) dibaca sebagai makro "mentah": tidak bisa disunting dan dijaga byte demi byte selama tidak dikosongkan.
+- Penyimpanan hanya menulis rentang byte yang berubah (dalam potongan 28 byte), lalu membaca seluruh buffer untuk memastikan hasilnya sama. Makro yang tidak diubah tidak ditulis ulang.
 
 ### 9.7 Yang tidak ada di protokol VIA: mode nirkabel dan baterai
 
@@ -387,7 +389,7 @@ Aturan impor backup: tolak bila VID/PID berbeda, matriks berbeda, jumlah layer m
 
 1. **Fase 0 murni baca.** Perintah tulis dan reset tidak pernah dikirim saat probe.
 2. **Snapshot otomatis** sebelum perubahan pertama pada setiap sesi.
-3. **Perintah berbahaya dikunci:** `bootloader_jump` (`0x0B`), `eeprom_reset` (`0x0A`), `macro_reset` (`0x10`), `dynamic_keymap_reset` (`0x06`), dan penugasan `U_EE_CLR` memerlukan konfirmasi yang menyebut dampaknya.
+3. **Perintah berbahaya dikunci:** `bootloader_jump` (`0x0B`), `eeprom_reset` (`0x0A`), `macro_reset` (`0x10`), `dynamic_keymap_reset` (`0x06`), dan penugasan `U_EE_CLR` memerlukan konfirmasi yang menyebut dampaknya. Di kode, klien hanya bisa mengirim perintah baca ditambah lima perintah tulis: `0x05` (satu keycode), `0x07` dan `0x09` (nilai dan simpan lighting), `0x0F` (isi buffer makro), `0x15` (keycode encoder). Selain itu ditolak sebelum sampai ke perangkat, dan seluruh perintah tulis ditolak pada mode baca saja.
 4. **Validasi keycode** sebelum menulis; di luar rentang protokol → ditolak.
 5. **Read-back** setelah setiap penulisan; gagal dua kali → hentikan dan beri tahu pengguna.
 6. **Perangkat terputus saat menulis:** jeda, tampilkan status, tawarkan sambung ulang lalu verifikasi ulang seluruh keymap terhadap snapshot.
@@ -415,7 +417,7 @@ Aturan impor backup: tolak bila VID/PID berbeda, matriks berbeda, jumlah layer m
 |---|---|---|---|
 | **0: Discovery** | halaman probe read-only di [`tools/probe/`](tools/probe/index.html): versi protokol, jumlah layer, makro, matrix state, custom channel 0, dump mentah. Sudah dibuat dan diuji dengan perangkat simulasi; belum dijalankan pada keyboard asli | 3-5 hari | Capabilities terisi; keputusan F10/F14/F15 final; simulator punya data nyata |
 | **1: MVP** | F01-F09 (F09 lewat palet keycode; panel khusus menyusul di Fase 2) | 15-20 hari | terhubung, baca 100% keymap, ubah tombol bertahan setelah cabut-colok; backup→restore identik; lighting tersimpan; uji otomatis hijau. Status: kerangka selesai dan lolos tes otomatis, build, dan uji browser dengan perangkat simulasi; kriteria cabut-colok dan semua yang menyangkut perangkat nyata belum diuji |
-| **2: Lengkap** | F10, F11, F12, F14, F16, F19 | 12-15 hari | makro round-trip identik; tester memakai matrix state; i18n ID/EN |
+| **2: Lengkap** | F10, F11, F12, F14, F16, F19 | 12-15 hari | makro round-trip identik; tester memakai matrix state; i18n ID/EN. Status: F10, F11, F12, dan F14 selesai dan lolos tes otomatis serta uji browser dengan perangkat simulasi. F16 baru sebagian (tema dan label Mac), i18n ID/EN belum. F19 ditunda sampai format simpan/muat VIA bisa diperiksa. PWA offline juga belum. Round-trip makro terhadap makro buatan VIA belum diuji pada perangkat nyata |
 | **3: Lanjutan** | F13, F18, evaluasi flashing/desktop | 15-25 hari | profil tukar-cepat; keputusan go/no-go flashing berdasarkan bootloader |
 
 Perkiraan di atas kasar (hari kerja efektif satu pengembang) dan akan dikoreksi setelah Fase 0.
