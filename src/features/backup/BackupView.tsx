@@ -1,7 +1,8 @@
 import { useRef, useState } from 'react';
-import { askConfirm } from '../../app/confirm';
+import { downloadJson, fileStamp } from '../../app/download';
 import type { SnapshotReason } from '../../core/storage/snapshots';
 import { appStore, useApp } from '../../state/app';
+import { runRestore } from './runRestore';
 
 const REASON: Record<SnapshotReason, string> = {
   connect: 'Saat tersambung',
@@ -10,9 +11,6 @@ const REASON: Record<SnapshotReason, string> = {
 };
 
 const MAX_FILE = 1024 * 1024;
-
-const stamp = (d: Date): string =>
-  `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}-${String(d.getHours()).padStart(2, '0')}${String(d.getMinutes()).padStart(2, '0')}`;
 
 export function BackupView() {
   const snapshots = useApp((s) => s.snapshots);
@@ -24,51 +22,14 @@ export function BackupView() {
   const download = (): void => {
     const backup = appStore.getState().exportBackup();
     if (!backup) return;
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' }));
-    a.download = `gen75-backup-${stamp(new Date())}.json`;
-    document.body.append(a);
-    a.click();
-    a.remove();
-    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    downloadJson(`gen75-backup-${fileStamp(new Date())}.json`, backup);
     setMessage({ text: 'Backup diunduh.', bad: false });
   };
 
   const restore = async (text: string): Promise<void> => {
     setMessage(null);
-    const prep = appStore.getState().prepareRestore(text);
-    if (!prep.ok) {
-      setMessage({ text: prep.error, bad: true });
-      return;
-    }
-    const nothing = prep.keyChanges.length === 0 && prep.encoderChanges.length === 0 && prep.lightingChanges.length === 0 && prep.macroTarget === null;
-    if (nothing) {
-      const skipped = prep.skipped.length ? ` ${prep.skipped.join(' ')}` : '';
-      setMessage({ text: `Isi backup sama dengan keadaan keyboard saat ini. Tidak ada yang perlu dipulihkan.${skipped}`, bad: false });
-      return;
-    }
-    const parts: string[] = [];
-    if (prep.keyChanges.length) parts.push(`${prep.keyChanges.length} keycode akan diubah`);
-    if (prep.encoderChanges.length) parts.push(`${prep.encoderChanges.length} putaran knob akan diubah`);
-    if (prep.macroTarget) parts.push('isi makro akan diganti');
-    if (prep.lightingChanges.length) parts.push(`${prep.lightingChanges.length} nilai lighting akan diubah`);
-    let text2 = `${parts.join(', ')}${prep.layers.length ? ` (layer ${prep.layers.join(', ')})` : ''}. Keadaan saat ini disimpan dulu sebagai snapshot.`;
-    if (prep.skipped.length) text2 += ` ${prep.skipped.join(' ')}`;
-    if (prep.dangerous > 0) text2 += ` Peringatan: ${prep.dangerous} keycode berisiko (reset atau hapus pengaturan) ikut dipulihkan.`;
-    const ok = await askConfirm({ title: 'Pulihkan backup?', message: text2, confirmLabel: 'Pulihkan', danger: prep.dangerous > 0 });
-    if (!ok) return;
-    const res = await appStore.getState().applyRestore(prep, { confirmedDanger: prep.dangerous > 0 });
-    if (res.ok) {
-      setMessage({
-        text:
-          res.mismatches === 0
-            ? `Pemulihan selesai: ${res.applied} perubahan ditulis dan terverifikasi.`
-            : `Pemulihan selesai, tetapi ${res.mismatches} posisi tidak cocok setelah dibaca ulang. Periksa keymap.`,
-        bad: res.mismatches > 0,
-      });
-    } else {
-      setMessage({ text: `Pemulihan gagal: ${res.message}`, bad: true });
-    }
+    const out = await runRestore(text);
+    setMessage({ text: out.applied ? `Pemulihan: ${out.text}` : out.text, bad: out.bad });
   };
 
   const onFile = async (file: File | undefined): Promise<void> => {

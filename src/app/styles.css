@@ -773,6 +773,107 @@ legend {
   opacity: 1;
 }
 
+/* profil dan perbandingan */
+.input.grow {
+  flex: 1 1 200px;
+  min-width: 0;
+}
+
+.switch {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+.switch select {
+  max-width: 190px;
+}
+
+.tag.ok {
+  border-color: var(--ok);
+  color: var(--ok);
+}
+
+.plist {
+  list-style: none;
+  margin: 0 0 10px;
+  padding: 0;
+}
+
+.plist li {
+  padding: 10px 0 10px 10px;
+  border-bottom: 1px solid var(--line);
+  border-left: 3px solid transparent;
+}
+
+.plist li.on {
+  border-left-color: var(--ok);
+}
+
+.phead {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  align-items: baseline;
+}
+
+.pnote {
+  color: var(--muted);
+  margin: 2px 0;
+}
+
+.pbtns {
+  margin: 8px 0 0;
+}
+
+.fld {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+.fld select {
+  min-width: 220px;
+  max-width: 100%;
+}
+
+.key.diff {
+  outline: 3px solid var(--warn);
+  outline-offset: 1px;
+  z-index: 2;
+}
+
+.key.same {
+  opacity: 0.5;
+}
+
+.tablewrap {
+  overflow-x: auto;
+}
+
+.difftab {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 13px;
+}
+
+.difftab th,
+.difftab td {
+  text-align: left;
+  padding: 5px 10px 5px 0;
+  border-bottom: 1px solid var(--line);
+  overflow-wrap: anywhere;
+}
+
+.difftab th {
+  color: var(--muted);
+  font-weight: 600;
+}
+
 @media (max-width: 760px) {
   .main {
     grid-template-columns: minmax(0, 1fr);

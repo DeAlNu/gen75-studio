@@ -1,11 +1,14 @@
 import { useEffect } from 'react';
 import { ConnectScreen } from '../components/ConnectScreen';
+import { ProfileSwitcher } from '../components/ProfileSwitcher';
 import { isWebHidSupported } from '../core/transport/webhid';
 import { BackupView } from '../features/backup/BackupView';
 import { FunctionsView } from '../features/functions/FunctionsView';
 import { KeymapView } from '../features/keymap/KeymapView';
 import { LightingView } from '../features/lighting/LightingView';
 import { MacroView } from '../features/macros/MacroView';
+import { CompareView } from '../features/profiles/CompareView';
+import { ProfilesView } from '../features/profiles/ProfilesView';
 import { SettingsView } from '../features/settings/SettingsView';
 import { TesterView } from '../features/tester/TesterView';
 import { appStore, useApp } from '../state/app';
@@ -20,9 +23,14 @@ const TABS: { id: Tab; label: string }[] = [
   { id: 'functions', label: 'Fungsi Gen 75' },
   { id: 'macros', label: 'Makro' },
   { id: 'tester', label: 'Tester' },
+  { id: 'profiles', label: 'Profil' },
+  { id: 'compare', label: 'Bandingkan' },
   { id: 'backup', label: 'Backup' },
   { id: 'settings', label: 'Setelan' },
 ];
+
+/** Bagian yang tetap bisa dibuka tanpa keyboard: pengaturan, profil tersimpan, dan perbandingan. */
+const OFFLINE_TABS: readonly Tab[] = ['settings', 'profiles', 'compare'];
 
 const STATUS_TEXT = {
   idle: 'belum terhubung',
@@ -44,6 +52,10 @@ function viewFor(tab: Tab) {
       return <MacroView />;
     case 'tester':
       return <TesterView />;
+    case 'profiles':
+      return <ProfilesView />;
+    case 'compare':
+      return <CompareView />;
     case 'backup':
       return <BackupView />;
     case 'settings':
@@ -68,6 +80,10 @@ export default function App() {
   useEffect(() => {
     applyTheme(theme);
   }, [theme]);
+
+  useEffect(() => {
+    void appStore.getState().loadStored();
+  }, []);
 
   useEffect(() => {
     if (!isWebHidSupported()) return;
@@ -99,7 +115,7 @@ export default function App() {
 
   const ready = status === 'ready';
   const act = appStore.getState();
-  const view = tab === 'settings' || ready ? viewFor(tab) : <ConnectScreen />;
+  const view = OFFLINE_TABS.includes(tab) || ready ? viewFor(tab) : <ConnectScreen />;
 
   return (
     <div className="app">
@@ -116,6 +132,7 @@ export default function App() {
         <span className="sp" />
         {ready && (
           <>
+            <ProfileSwitcher />
             <button type="button" className="btn" disabled={!canUndo || busy || !writable} onClick={() => void act.undo()} title="Urungkan (Ctrl+Z)">
               Undo
             </button>
