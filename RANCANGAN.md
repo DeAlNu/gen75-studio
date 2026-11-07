@@ -153,14 +153,14 @@ Peluang untuk Gen 75 (tidak berarti VIA pasti tidak punya; beberapa perlu dicek)
 
 ### 7.1 Navigasi
 
-Sidebar: **Keymap · Lighting · Fungsi Gen 75 · Makro · Tester · Backup · Setelan**.
+Sidebar: **Keymap · Lighting · Fungsi Gen 75 · Makro · Tester · Profil · Bandingkan · Backup · Setelan**. Profil, Bandingkan, dan Setelan tetap bisa dibuka tanpa keyboard.
 Bilah atas: status koneksi (nama, VID:PID, versi protokol), Undo/Redo, profil aktif.
 
 ```
 ┌────────────────────────────────────────────────────────────────────────────┐
 │ ● GEN 75 · USB · 36B0:3077 · protokol N        [↶][↷]   Profil: Harian ▾  │
 ├─────────┬──────────────────────────────────────────────────────────────────┤
-│ Keymap  │ Layer: [0] [1] [2] [3]        ☐ Label Mac    ☐ Koordinat        │
+│ Keymap  │ Layer: [0] [1] [2] [3]        [ ] Label Mac  [ ] Koordinat      │
 │ Lighting│ ┌──────────────────────────────────────────────────────────────┐ │
 │ Fungsi  │ │ Esc F1 F2 F3 F4 F5 F6 F7 F8 F9 F10 F11 F12   Del   (●)       │ │
 │ Makro   │ │ `  1  2  3  4  5  6  7  8  9  0  -  =  ⌫⌫    PgUp           │ │
@@ -246,15 +246,15 @@ gen75-studio/
 ├─ src/
 │  ├─ app/            # App, tema, setelan, dialog konfirmasi, CSS
 │  ├─ components/     # kanvas keyboard, layar sambung
-│  ├─ features/       # keymap, lighting, backup, settings (makro dan tester menyusul)
+│  ├─ features/       # keymap, lighting, fungsi, makro, tester, profil (+ bandingkan), backup, settings
 │  ├─ state/          # store aplikasi (zustand), instance produksi
 │  └─ core/
 │     ├─ transport/   # WebHID, perangkat simulasi
 │     ├─ via/         # ViaClient, perintah, galat
 │     ├─ definition/  # parser KLE, menu v3, showIf, opsi layout (membaca GEN 75.JSON)
 │     ├─ keycodes/    # katalog dan codec 16-bit
-│     ├─ storage/     # snapshot (IndexedDB atau memori)
-│     └─ session.ts, backup.ts, color.ts
+│     ├─ storage/     # snapshot dan profil (IndexedDB v2 atau memori)
+│     └─ session.ts, backup.ts, profiles.ts, compare.ts, macros.ts, matrix.ts, color.ts
 ├─ tools/probe/       # Fase 0, read-only
 ├─ prototype/         # prototipe UI statis
 └─ test/              # tes unit (Vitest)
@@ -375,13 +375,28 @@ interface Backup {                    // berkas .json yang diunduh pengguna
   device: { name: string; vendorId: string; productId: string;
             matrix: { rows: number; cols: number }; protocolVersion: number };
   keymap: { layers: string[][] };     // keycode heksadesimal, urut baris-mayor
-  macros: { actions: MacroAction[] }[];
-  lighting: Record<string, number | number[]>;
-  layoutOptions: number;
+  lighting: Record<string, number | number[]> | null;
+  macros?: { count: number; bytes: string } | null;   // isi buffer, heksadesimal
+  encoders?: string[][][] | null;     // [layer][knob][0 berlawanan, 1 searah]
+}
+interface Profile {                   // disimpan di IndexedDB, gudang "profiles"
+  id: string; name: string; note: string;
+  createdAt: string; updatedAt: string;
+  backup: Backup;
+}
+interface ProfileFile {               // berkas ekspor satu profil
+  schemaVersion: 1; kind: 'gen75-studio-profile';
+  name: string; note: string; backup: Backup;
 }
 ```
 
 Aturan impor backup: tolak bila VID/PID berbeda, matriks berbeda, jumlah layer melebihi kapasitas perangkat, atau keycode di luar rentang protokol; tampilkan alasan yang spesifik. Ekspor sebisa mungkin kompatibel dengan format simpan/muat VIA (F19, [A] cek format sebelum klaim).
+
+**Profil (F13).** Maksimal 30 profil; nama unik tanpa membedakan huruf besar kecil (paling panjang 40 karakter), catatan paling panjang 200. Menerapkan profil memakai alur pemulihan yang sama dengan backup: validasi ketat, ringkasan perubahan, snapshot "sebelum pemulihan", lalu verifikasi baca-ulang. Pengguna boleh memilih bagian yang diterapkan (keymap, knob, makro, lighting). Profil "aktif" tidak disimpan: dihitung dengan membandingkan isi keyboard dengan tiap profil, jadi tidak pernah basi; bila belum cocok, bilah atas menandai profil yang terakhir diterapkan sebagai "diubah". Impor menerima berkas profil dan berkas backup biasa, hanya menyimpan, dan tidak menulis ke keyboard.
+
+**Perbandingan (F18).** `compareBackups` membandingkan dua Backup mana pun (keyboard sekarang, profil, atau snapshot) dari A ke B tanpa menulis apa pun: keycode per layer dan tombol, putaran knob, makro per slot (dijelaskan dalam kata-kata), dan nilai lighting (memakai label dari definisi). Bagian yang hanya ada di satu sisi, atau jumlah layer dan slot makro yang berbeda, dilaporkan sebagai catatan, bukan sebagai perbedaan. Data lama atau rusak di penyimpanan browser disaring supaya tidak merusak halaman.
+
+**Penyimpanan.** Basis data IndexedDB `gen75-studio` naik ke versi 2: gudang `profiles` ditambahkan tanpa menyentuh `snapshots`. Perpindahan dari versi 1 diuji di browser dengan isi lama yang tetap utuh.
 
 ---
 
@@ -418,9 +433,35 @@ Aturan impor backup: tolak bila VID/PID berbeda, matriks berbeda, jumlah layer m
 | **0: Discovery** | halaman probe read-only di [`tools/probe/`](tools/probe/index.html): versi protokol, jumlah layer, makro, matrix state, custom channel 0, dump mentah. Sudah dibuat dan diuji dengan perangkat simulasi; belum dijalankan pada keyboard asli | 3-5 hari | Capabilities terisi; keputusan F10/F14/F15 final; simulator punya data nyata |
 | **1: MVP** | F01-F09 (F09 lewat palet keycode; panel khusus menyusul di Fase 2) | 15-20 hari | terhubung, baca 100% keymap, ubah tombol bertahan setelah cabut-colok; backup→restore identik; lighting tersimpan; uji otomatis hijau. Status: kerangka selesai dan lolos tes otomatis, build, dan uji browser dengan perangkat simulasi; kriteria cabut-colok dan semua yang menyangkut perangkat nyata belum diuji |
 | **2: Lengkap** | F10, F11, F12, F14, F16, F19 | 12-15 hari | makro round-trip identik; tester memakai matrix state; i18n ID/EN. Status: F10, F11, F12, dan F14 selesai dan lolos tes otomatis serta uji browser dengan perangkat simulasi. F16 baru sebagian (tema dan label Mac), i18n ID/EN belum. F19 ditunda sampai format simpan/muat VIA bisa diperiksa. PWA offline juga belum. Round-trip makro terhadap makro buatan VIA belum diuji pada perangkat nyata |
-| **3: Lanjutan** | F13, F18, evaluasi flashing/desktop | 15-25 hari | profil tukar-cepat; keputusan go/no-go flashing berdasarkan bootloader |
+| **3: Lanjutan** | F13, F18, evaluasi flashing/desktop | 15-25 hari | profil tukar-cepat; keputusan go/no-go flashing berdasarkan bootloader. Status: F13 dan F18 selesai dan lolos tes otomatis serta uji browser dengan perangkat simulasi (tukar profil lewat bilah atas, perbandingan antar profil, migrasi IndexedDB v1 ke v2). Keputusan flashing dan desktop: no-go untuk saat ini, alasannya di 13.1. Belum diuji pada keyboard asli |
 
 Perkiraan di atas kasar (hari kerja efektif satu pengembang) dan akan dikoreksi setelah Fase 0.
+
+### 13.1 Keputusan flashing dan desktop (Fase 3)
+
+**Keputusan: no-go untuk flashing firmware, dan no-go untuk membungkus app sebagai aplikasi desktop.** Keduanya ditinjau ulang bila syarat di bawah terpenuhi.
+
+Bukti yang dipakai:
+
+| Temuan | Sumber |
+|---|---|
+| Tabel vektor `gen75.bin` di offset 0: SP awal `0x20000400`, reset handler `0x00000191` (Thumb, kode di `0x190`). Image ditautkan untuk alamat dasar 0x0, bukan 0x08000000 (khas STM32) dan tanpa jejak offset bootloader di alamatnya | [V] bin |
+| Dari sini MCU tidak bisa disimpulkan, dan belum jelas apakah berkas ini isi flash penuh atau paket untuk alat update pabrikan | [A] |
+| Tidak ada string bootloader, DFU, atau QMK di image | [V] bin |
+| Satu-satunya jalur bootloader di protokol VIA adalah `bootloader_jump` (`0x0B`). Klien memblokirnya, dan belum terbukti firmware pabrikan mengimplementasikannya | [V] kode, [A] firmware |
+| Tidak ada firmware sumber dan tidak ada alat update pabrikan yang diketahui, jadi papan yang gagal flash tidak punya jalur pulih yang terbukti | [A] |
+| WebHID tidak bisa berbicara dengan bootloader DFU (kelas USB lain). Flashing dari browser butuh WebUSB dan bootloader berprotokol terbuka | [D] |
+
+Mengapa tidak diteruskan: flashing salah pada papan tanpa jalur pulih yang terbukti bisa mematikan papan secara permanen, sementara semua fitur lain sudah jalan lewat WebHID di Chrome dan Edge. Bungkus desktop (Tauri atau Electron) baru menambah nilai bila ada akses USB non-HID yang dibutuhkan untuk flashing; tanpa itu hanya menambah beban pemasangan dan pembaruan. Bila yang dibutuhkan hanya pemakaian offline, PWA lebih murah dan belum dikerjakan.
+
+Syarat go (semuanya harus terpenuhi):
+
+1. Bootloader teridentifikasi: VID:PID saat papan dalam mode bootloader (dicatat pengguna dari Device Manager lewat cara masuk resmi pabrikan) dan protokolnya terdokumentasi.
+2. Ada firmware sumber atau berkas pemulihan resmi yang bisa di-flash kembali.
+3. Ada jalur pulih yang terbukti, misalnya bootloader di ROM yang tidak bisa tertimpa, atau papan cadangan untuk percobaan.
+4. Lisensi firmware mengizinkan (lihat bagian 11, butir 8).
+
+Yang dibutuhkan dari pengguna bila ingin melanjutkan: hasil `tools/probe/` dari keyboard asli, nama dan tautan alat update pabrikan (kalau ada), dan VID:PID saat papan dalam mode bootloader.
 
 ---
 
@@ -433,7 +474,7 @@ Perkiraan di atas kasar (hari kerja efektif satu pengembang) dan akan dikoreksi 
 | R3 | Baterai/mode tidak bisa dibaca | F15 opsional; tidak dipalsukan |
 | R4 | Penulisan merusak EEPROM/keymap | snapshot, read-back, debounce, kunci perintah berbahaya |
 | R5 | Bug di definisi JSON (bagian 2) | perbaiki definisi; uji dengan kanvas dan opsi layout |
-| R6 | Dukungan browser terbatas | pesan jelas; jalur desktop di Fase 3 |
+| R6 | Dukungan browser terbatas | pesan jelas; bungkus desktop dinilai belum perlu (lihat 13.1) |
 | R7 | Isu merek/hak cipta | nama netral, tanpa redistribusi firmware |
 
 **Pertanyaan terbuka** (jawabannya mengubah rancangan):

@@ -13,11 +13,13 @@ Proyek pribadi, belum ada rilis. Bukan produk resmi pabrikan.
 - **Makro**: editor aksi (ketuk, tahan, lepas, jeda, teks), perekam dari keyboard, indikator memori, draf yang disimpan sekaligus dan diverifikasi.
 - **Tester**: membaca keadaan matriks langsung dari keyboard (termasuk Fn dan knob), dengan cadangan lewat event browser.
 - **Lighting**: menu dibangun dari definisi perangkat (brightness, efek, kecepatan, warna), disimpan ke keyboard setelah berhenti digeser.
+- **Profil**: simpan keadaan keyboard sebagai profil bernama (sampai 30), tukar cepat dari bilah atas dengan ringkasan perubahan dan konfirmasi, pilih bagian yang diterapkan (keymap, knob, makro, lighting), ekspor dan impor berkas profil. Daftar profil dan impor tetap bisa dibuka tanpa keyboard.
+- **Bandingkan**: selisih antara keyboard sekarang, profil, atau snapshot (keycode per layer dengan kanvas bertanda, putaran knob, makro, lighting), tanpa menulis apa pun.
 - **Backup** berkas JSON (keymap, knob, makro, lighting) dan snapshot otomatis di browser; pemulihan menampilkan ringkasan perubahan dulu.
 - Keselamatan: mode baca saja untuk protokol di bawah 12, daftar putih perintah HID, verifikasi baca-ulang setiap tulis, konfirmasi untuk keycode berisiko.
 - Mode simulasi untuk mencoba tanpa keyboard.
 
-Belum ada: profil bernama, impor dan ekspor format VIA, bahasa Inggris, mode offline (PWA), pembaruan firmware. Urutannya ada di peta jalan `RANCANGAN.md`.
+Belum ada: impor dan ekspor format VIA, bahasa Inggris, mode offline (PWA). Pembaruan firmware dan aplikasi desktop sengaja tidak dibuat; alasannya ada di `RANCANGAN.md` bagian 13.1.
 
 ## Menjalankan
 
