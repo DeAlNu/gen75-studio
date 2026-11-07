@@ -1,0 +1,357 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Probe Gen 75</title>
+<style>
+:root{--bg:#0e1015;--panel:#161922;--panel2:#1d212c;--line:#2a2f3c;--text:#e8eaf0;--muted:#9aa1b4;--accent:#ff7a1a;--ink:#1a0e00;--ok:#3ddc97;--bad:#ff6b78;--warn:#ffcc4d}
+@media (prefers-color-scheme:light){:root{--bg:#f3f4f8;--panel:#fff;--panel2:#eceef4;--line:#d6dae4;--text:#161922;--muted:#586078;--accent:#d95c00;--ink:#fff;--ok:#12805a;--bad:#c42b3a;--warn:#8a5a00}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:14px/1.5 system-ui,"Segoe UI",Roboto,sans-serif}
+main{max-width:900px;margin:0 auto;padding:16px}
+h1{font-size:20px;margin:0 0 4px}
+h2{font-size:13px;margin:0 0 8px;color:var(--muted);text-transform:uppercase;letter-spacing:.6px}
+p{margin:0 0 10px;color:var(--muted)}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px;margin-bottom:14px}
+.row{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;margin-bottom:8px}
+button{font:inherit;color:inherit;background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:6px 14px;cursor:pointer}
+button:hover:not(:disabled){border-color:var(--accent)}
+button:disabled{opacity:.45;cursor:not-allowed}
+button.pri{background:var(--accent);border-color:var(--accent);color:var(--ink);font-weight:600}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+label{color:var(--muted);display:inline-flex;gap:6px;align-items:center}
+.pill{display:inline-flex;gap:6px;align-items:center;padding:3px 10px;border:1px solid var(--line);border-radius:999px;background:var(--panel2);font-size:12px;color:var(--muted)}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--warn)}
+.pill.on .dot{background:var(--ok)}
+.notice{border-left:3px solid var(--warn);background:var(--panel2);padding:8px 12px;border-radius:0 8px 8px 0;margin-bottom:12px}
+.notice.sim{border-color:var(--accent)}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th,td{text-align:left;padding:5px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+th{color:var(--muted);font-weight:600}
+td:first-child{min-width:150px}
+td:nth-child(2){font-family:ui-monospace,Consolas,monospace;overflow-wrap:anywhere}
+td:nth-child(3){color:var(--muted)}
+.mono{font-family:ui-monospace,Consolas,monospace;font-size:12.5px}
+#matrixOut{min-height:2.4em;padding:8px 10px;background:var(--panel2);border:1px solid var(--line);border-radius:8px}
+#logOut{height:200px;overflow:auto;background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:8px 10px;font:12px/1.5 ui-monospace,Consolas,monospace}
+#logOut .warn{color:var(--warn)}
+#logOut .bad{color:var(--bad)}
+ul{margin:0 0 8px;padding-left:20px;color:var(--muted)}
+</style>
+</head>
+<body>
+<main>
+  <h1>Probe Gen 75</h1>
+  <p>Halaman ini hanya membaca data dari keyboard. Tidak ada perintah tulis, reset, atau lompat ke bootloader yang dikirim. Hasilnya dipakai untuk memastikan protokol firmware sebelum aplikasi utama dibuat.</p>
+
+  <div class="notice sim" id="simNote" hidden>Mode simulasi aktif: perangkat di bawah ini palsu dan hanya ada di halaman ini.</div>
+  <div class="notice" id="noHid" hidden>Browser ini tidak mendukung WebHID. Pakai Chrome atau Edge versi terbaru.</div>
+
+  <section class="card">
+    <h2>Persiapan</h2>
+    <ul>
+      <li>Sambungkan keyboard lewat kabel USB (mode kabel).</li>
+      <li>Tutup tab VIA dan aplikasi lain yang memakai keyboard, supaya perangkat tidak terkunci.</li>
+      <li>Klik Sambungkan, lalu pilih perangkat di dialog browser.</li>
+    </ul>
+    <div class="row">
+      <button class="pri" id="btnConnect">Sambungkan</button>
+      <button id="btnClose" disabled>Putuskan</button>
+      <span class="pill" id="status"><span class="dot"></span><span id="statusText">belum terhubung</span></span>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>Probe</h2>
+    <div class="row">
+      <label><input type="checkbox" id="optMacro" checked> baca buffer makro</label>
+      <label><input type="checkbox" id="optCh0"> coba channel kustom 0 (opsional)</label>
+    </div>
+    <div class="row">
+      <button class="pri" id="btnProbe" disabled>Jalankan probe</button>
+      <button id="btnDump" disabled>Unduh hasil (.json)</button>
+      <button id="btnCopy" disabled>Salin ringkasan</button>
+    </div>
+    <table>
+      <thead><tr><th>Item</th><th>Nilai</th><th>Keterangan</th></tr></thead>
+      <tbody id="results"></tbody>
+    </table>
+  </section>
+
+  <section class="card">
+    <h2>Uji matriks</h2>
+    <p>Tekan tombol di keyboard; posisi baris,kolom yang tertekan muncul di bawah. Dipakai untuk mencocokkan peta matriks pada JSON dengan papan fisik.</p>
+    <div class="row"><button id="btnMatrix" disabled>Mulai uji matriks</button></div>
+    <div id="matrixOut" class="mono">-</div>
+  </section>
+
+  <section class="card">
+    <h2>Perintah yang dikirim</h2>
+    <p>Daftar putih di kode hanya berisi perintah baca: <span class="mono">0x01 0x02 0x04 0x08 0x0C 0x0D 0x0E 0x11 0x12 0x14</span>. Perintah lain ditolak sebelum sampai ke perangkat.</p>
+    <div id="logOut" role="log" aria-live="off"></div>
+  </section>
+</main>
+
+<script src="mock-device.js"></script>
+<script>
+(()=>{
+'use strict';
+const VID=0x36B0, PID=0x3077;            /* dari GEN 75.JSON */
+const ROWS=6, COLS=16, LAYER_BYTES=ROWS*COLS*2;
+const CUSTOM=['2.4G','BLE1','BLE2','BLE3','USB','BAT','WLO','SIX_N','FN_ALT','RTOG','U_EE_CLR'];
+const READ_ONLY=new Set([0x01,0x02,0x04,0x08,0x0C,0x0D,0x0E,0x11,0x12,0x14]);
+const TIMEOUT=500, MAX_LAYERS=8, MAX_MACRO=4096;
+
+const $=id=>document.getElementById(id);
+const hex=(u8,n=u8.length)=>Array.from(u8.slice(0,n),b=>b.toString(16).padStart(2,'0')).join(' ');
+const h16=v=>'0x'+v.toString(16).toUpperCase().padStart(4,'0');
+
+let dev=null, waiter=null, chain=Promise.resolve(), polling=false;
+let keymapWords=null, macroHex=null;
+const rawLog=[], results=[];
+
+function log(msg,cls){
+  const line=document.createElement('div');
+  if(cls)line.className=cls;
+  line.textContent=new Date().toLocaleTimeString('id-ID')+'  '+msg;
+  const box=$('logOut');
+  box.append(line);
+  while(box.children.length>400)box.firstChild.remove();
+  box.scrollTop=box.scrollHeight;
+}
+function setStatus(text,on){
+  $('statusText').textContent=text;
+  $('status').classList.toggle('on',!!on);
+  for(const id of ['btnClose','btnProbe','btnMatrix'])$(id).disabled=!on;
+}
+
+/* transport: satu perintah dalam penerbangan, hanya perintah baca */
+function send(...bytes){
+  const cmd=bytes[0];
+  if(!READ_ONLY.has(cmd))return Promise.reject(new Error('perintah 0x'+cmd.toString(16)+' ditolak (bukan perintah baca)'));
+  const job=chain.then(()=>exchange(bytes));
+  chain=job.catch(()=>{});
+  return job;
+}
+function exchange(bytes){
+  return new Promise((resolve,reject)=>{
+    const buf=new Uint8Array(32);
+    buf.set(bytes);
+    const entry={req:hex(buf),res:null};
+    rawLog.push(entry);
+    const cmd=bytes[0];
+    const timer=setTimeout(()=>{waiter=null;entry.res='timeout';resolve({timeout:true});},TIMEOUT);
+    waiter=d=>{
+      if(d[0]!==cmd&&d[0]!==0xFF)return false;
+      clearTimeout(timer);waiter=null;entry.res=hex(d);
+      resolve({data:d,unhandled:d[0]===0xFF});
+      return true;
+    };
+    dev.sendReport(0,buf).catch(err=>{clearTimeout(timer);waiter=null;reject(err);});
+  });
+}
+async function ask(...bytes){
+  const r=await send(...bytes);
+  if(r.timeout)return{ok:false,why:'tidak ada respons'};
+  if(r.unhandled)return{ok:false,why:'perintah tidak dikenal firmware (0xFF)'};
+  return{ok:true,d:r.data};
+}
+function onReport(e){
+  const d=new Uint8Array(e.data.buffer,e.data.byteOffset,e.data.byteLength).slice();
+  if(waiter&&waiter(d))return;
+  log('laporan tak terduga: '+hex(d,8),'warn');
+}
+
+/* koneksi */
+async function connect(){
+  if(!('hid' in navigator)){$('noHid').hidden=false;return;}
+  try{
+    const picked=await navigator.hid.requestDevice({filters:[{vendorId:VID,productId:PID,usagePage:0xFF60,usage:0x61}]});
+    if(!picked.length){log('tidak ada perangkat dipilih','warn');return;}
+    dev=picked[0];
+    if(!dev.opened)await dev.open();
+    dev.addEventListener('inputreport',onReport);
+    setStatus(`terhubung: ${dev.productName||'perangkat'} (${h16(dev.vendorId)}:${h16(dev.productId)})`,true);
+    log('perangkat dibuka');
+  }catch(err){
+    log('gagal menyambung: '+err.message+'. Tutup VIA atau aplikasi lain yang memakai keyboard, lalu coba lagi.','bad');
+  }
+}
+async function disconnect(){
+  polling=false;
+  if(dev){try{await dev.close();}catch{}dev.removeEventListener('inputreport',onReport);}
+  dev=null;setStatus('belum terhubung',false);log('perangkat ditutup');
+}
+if('hid' in navigator&&navigator.hid.addEventListener){
+  navigator.hid.addEventListener('disconnect',e=>{if(e.device===dev){polling=false;dev=null;setStatus('perangkat dicabut',false);log('perangkat dicabut','warn');}});
+}
+
+/* probe */
+async function readKeymap(layers){
+  const out=[];
+  for(let l=0;l<layers;l++){
+    const buf=new Uint8Array(LAYER_BYTES);
+    for(let off=0;off<LAYER_BYTES;off+=28){
+      const n=Math.min(28,LAYER_BYTES-off), abs=l*LAYER_BYTES+off;
+      const r=await ask(0x12,abs>>8,abs&0xFF,n);
+      if(!r.ok)return{error:`layer ${l}, offset ${off}: ${r.why}`};
+      buf.set(r.d.slice(4,4+n),off);
+    }
+    const words=[];
+    for(let i=0;i<LAYER_BYTES;i+=2)words.push((buf[i]<<8)|buf[i+1]);
+    out.push(words);
+  }
+  return{layers:out};
+}
+async function readMacroBuffer(size){
+  const total=Math.min(size,MAX_MACRO), buf=new Uint8Array(total);
+  for(let off=0;off<total;off+=28){
+    const n=Math.min(28,total-off);
+    const r=await ask(0x0E,off>>8,off&0xFF,n);
+    if(!r.ok)return null;
+    buf.set(r.d.slice(4,4+n),off);
+  }
+  return buf;
+}
+async function runProbe(){
+  $('btnProbe').disabled=true;
+  results.length=0;keymapWords=null;macroHex=null;rawLog.length=0;
+  $('results').replaceChildren();
+  const add=(k,v,note='')=>{
+    results.push({item:k,nilai:v,keterangan:note});
+    const tr=document.createElement('tr');
+    for(const t of [k,v,note]){const td=document.createElement('td');td.textContent=t;tr.append(td);}
+    $('results').append(tr);
+  };
+  const fail=(k,r)=>add(k,'-',r.why);
+  try{
+    let r=await ask(0x01);
+    if(r.ok){const p=(r.d[1]<<8)|r.d[2];add('Versi protokol VIA',`${p} (${h16(p)})`,p>=11?'definisi v3 berlaku':'di bawah 11, definisi v3 mungkin tidak berlaku');}
+    else fail('Versi protokol VIA',r);
+
+    r=await ask(0x02,0x01);
+    if(r.ok)add('Uptime perangkat (ms)',String(((r.d[2]<<24)|(r.d[3]<<16)|(r.d[4]<<8)|r.d[5])>>>0));
+    else fail('Uptime perangkat',r);
+
+    r=await ask(0x02,0x02);
+    if(r.ok)add('Opsi layout tersimpan',h16(((r.d[2]<<8)|r.d[3])),'bit 0 = opsi Caps Lock bila firmware memakainya');
+    else fail('Opsi layout tersimpan',r);
+
+    r=await ask(0x02,0x04);
+    if(r.ok)add('Versi firmware (nilai VIA)',hex(r.d.slice(2,6)),'banyak firmware tidak menyediakan');
+    else fail('Versi firmware (nilai VIA)',r);
+
+    r=await ask(0x11);
+    let layers=0;
+    if(r.ok){layers=r.d[1];add('Jumlah layer',String(layers),layers>0&&layers<=MAX_LAYERS?'':'nilai tidak wajar, keymap tidak dibaca');}
+    else fail('Jumlah layer',r);
+
+    r=await ask(0x0C);
+    if(r.ok)add('Jumlah slot makro',String(r.d[1]));else fail('Jumlah slot makro',r);
+
+    r=await ask(0x0D);
+    let macroSize=0;
+    if(r.ok){macroSize=(r.d[1]<<8)|r.d[2];add('Ukuran buffer makro (byte)',String(macroSize));}
+    else fail('Ukuran buffer makro',r);
+
+    if(layers>0&&layers<=MAX_LAYERS){
+      const km=await readKeymap(layers);
+      if(km.error){add('Keymap','-',km.error);}
+      else{
+        keymapWords=km.layers;
+        km.layers.forEach((w,i)=>{
+          const filled=w.filter(v=>v!==0).length;
+          add(`Layer ${i}`,`${filled} slot terisi`,i===0?'definisi memakai 83 posisi':'');
+        });
+        const flat=km.layers.flat();
+        const inRange=base=>flat.filter(v=>v>=base&&v<base+CUSTOM.length).length;
+        add('Keycode kustom di keymap',`0x7E00..: ${inRange(0x7E00)} | 0x5F80..: ${inRange(0x5F80)}`,'rentang mana yang terisi menunjukkan basis keycode kustom (hanya terlihat bila keymap pabrik memakainya)');
+        add('Layer 0 baris pertama',km.layers[0].slice(0,16).map(h16).join(' '),'baris matriks 0');
+      }
+    }
+
+    for(const [id,name] of [[1,'brightness'],[2,'efek'],[3,'kecepatan'],[4,'warna (hue, sat)']]){
+      r=await ask(0x08,3,id);
+      if(r.ok)add(`Lighting: ${name}`,id===4?`${r.d[3]}, ${r.d[4]}`:String(r.d[3]),`channel 3, id ${id}`);
+      else fail(`Lighting: ${name}`,r);
+    }
+
+    for(const cw of [0,1]){
+      r=await ask(0x14,0,0,cw);
+      if(r.ok)add(`Encoder 0 ${cw?'searah jarum jam':'berlawanan'}`,h16((r.d[4]<<8)|r.d[5]),'layer 0');
+      else fail(`Encoder 0 ${cw?'searah jarum jam':'berlawanan'}`,r);
+    }
+
+    if($('optMacro').checked&&macroSize>0){
+      const mb=await readMacroBuffer(macroSize);
+      if(mb){
+        macroHex=hex(mb);
+        let used=mb.length;while(used>0&&mb[used-1]===0)used--;
+        add('Buffer makro',`${used} byte terpakai`,used?hex(mb,Math.min(used,32)):'kosong');
+      }else add('Buffer makro','-','gagal dibaca');
+    }
+
+    if($('optCh0').checked){
+      for(let id=0;id<4;id++){
+        r=await ask(0x08,0,id);
+        add(`Channel 0, id ${id}`,r.ok?hex(r.d,8):'-',r.ok?'respons mentah':r.why);
+      }
+    }
+    log('probe selesai');
+    $('btnDump').disabled=false;$('btnCopy').disabled=false;
+  }catch(err){
+    log('probe berhenti: '+err.message,'bad');
+  }finally{
+    $('btnProbe').disabled=!dev;
+  }
+}
+
+/* uji matriks */
+async function toggleMatrix(){
+  if(polling){polling=false;return;}
+  polling=true;$('btnMatrix').textContent='Hentikan uji matriks';
+  while(polling&&dev){
+    const r=await ask(0x02,0x03);
+    if(!r.ok){$('matrixOut').textContent='gagal: '+r.why;break;}
+    const pressed=[];
+    for(let row=0;row<ROWS;row++){
+      const v=(r.d[2+row*2]<<8)|r.d[3+row*2];
+      for(let c=0;c<COLS;c++)if(v&(1<<c))pressed.push(`${row},${c}`);
+    }
+    $('matrixOut').textContent=pressed.length?pressed.join('   '):'(tidak ada tombol tertekan)';
+    await new Promise(res=>setTimeout(res,60));
+  }
+  polling=false;$('btnMatrix').textContent='Mulai uji matriks';
+}
+
+/* keluaran */
+function summary(){
+  return results.map(r=>`${r.item}: ${r.nilai}${r.keterangan?` (${r.keterangan})`:''}`).join('\n');
+}
+function download(){
+  const data={
+    tool:'probe-gen75',versi:1,diambil:new Date().toISOString(),
+    perangkat:{vendorId:h16(dev?dev.vendorId:VID),productId:h16(dev?dev.productId:PID),nama:dev?dev.productName:null},
+    hasil:results,keymap:keymapWords,makroHex:macroHex,mentah:rawLog.slice(-400)
+  };
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([JSON.stringify(data,null,2)],{type:'application/json'}));
+  a.download='probe-gen75.json';
+  document.body.append(a);a.click();a.remove();
+  setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+}
+
+$('btnConnect').onclick=connect;
+$('btnClose').onclick=disconnect;
+$('btnProbe').onclick=runProbe;
+$('btnMatrix').onclick=toggleMatrix;
+$('btnDump').onclick=download;
+$('btnCopy').onclick=async()=>{try{await navigator.clipboard.writeText(summary());log('ringkasan disalin');}catch{log('gagal menyalin, pakai tombol unduh','warn');}};
+$('noHid').hidden='hid' in navigator;
+$('simNote').hidden=!window.__mock;
+window.__probe={send};   /* dipakai uji simulasi */
+})();
+</script>
+</body>
+</html>
