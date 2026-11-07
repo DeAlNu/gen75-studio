@@ -41,14 +41,19 @@ export function BackupView() {
       setMessage({ text: prep.error, bad: true });
       return;
     }
-    if (prep.keyChanges.length === 0 && prep.lightingChanges.length === 0) {
-      setMessage({ text: 'Isi backup sama dengan keadaan keyboard saat ini. Tidak ada yang perlu dipulihkan.', bad: false });
+    const nothing = prep.keyChanges.length === 0 && prep.encoderChanges.length === 0 && prep.lightingChanges.length === 0 && prep.macroTarget === null;
+    if (nothing) {
+      const skipped = prep.skipped.length ? ` ${prep.skipped.join(' ')}` : '';
+      setMessage({ text: `Isi backup sama dengan keadaan keyboard saat ini. Tidak ada yang perlu dipulihkan.${skipped}`, bad: false });
       return;
     }
     const parts: string[] = [];
-    if (prep.keyChanges.length) parts.push(`${prep.keyChanges.length} keycode di layer ${prep.layers.join(', ')} akan diubah`);
+    if (prep.keyChanges.length) parts.push(`${prep.keyChanges.length} keycode akan diubah`);
+    if (prep.encoderChanges.length) parts.push(`${prep.encoderChanges.length} putaran knob akan diubah`);
+    if (prep.macroTarget) parts.push('isi makro akan diganti');
     if (prep.lightingChanges.length) parts.push(`${prep.lightingChanges.length} nilai lighting akan diubah`);
-    let text2 = `${parts.join(' dan ')}. Keadaan saat ini disimpan dulu sebagai snapshot.`;
+    let text2 = `${parts.join(', ')}${prep.layers.length ? ` (layer ${prep.layers.join(', ')})` : ''}. Keadaan saat ini disimpan dulu sebagai snapshot.`;
+    if (prep.skipped.length) text2 += ` ${prep.skipped.join(' ')}`;
     if (prep.dangerous > 0) text2 += ` Peringatan: ${prep.dangerous} keycode berisiko (reset atau hapus pengaturan) ikut dipulihkan.`;
     const ok = await askConfirm({ title: 'Pulihkan backup?', message: text2, confirmLabel: 'Pulihkan', danger: prep.dangerous > 0 });
     if (!ok) return;
@@ -57,7 +62,7 @@ export function BackupView() {
       setMessage({
         text:
           res.mismatches === 0
-            ? `Pemulihan selesai: ${res.applied} keycode ditulis dan terverifikasi.`
+            ? `Pemulihan selesai: ${res.applied} perubahan ditulis dan terverifikasi.`
             : `Pemulihan selesai, tetapi ${res.mismatches} posisi tidak cocok setelah dibaca ulang. Periksa keymap.`,
         bad: res.mismatches > 0,
       });
@@ -80,8 +85,8 @@ export function BackupView() {
     <section>
       <h2>Backup</h2>
       <p className="hint">
-        Backup adalah berkas JSON berisi keymap semua layer dan nilai lighting. Memuat backup menolak berkas yang tidak cocok dengan perangkat
-        (VID/PID atau ukuran matriks).
+        Backup adalah berkas JSON berisi keymap semua layer, putaran knob, makro, dan nilai lighting. Memuat backup menolak berkas yang tidak
+        cocok dengan perangkat (VID/PID, ukuran matriks, atau jumlah slot makro).
       </p>
 
       <div className="card">

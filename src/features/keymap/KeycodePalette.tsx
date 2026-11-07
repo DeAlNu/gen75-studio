@@ -6,13 +6,14 @@ import { macLabel } from '../../components/labels';
 interface Props {
   ctx: KeycodeContext;
   layerCount: number;
+  macroCount: number;
   disabled: boolean;
   mac: boolean;
   onPick: (code: number) => void;
 }
 
-export function KeycodePalette({ ctx, layerCount, disabled, mac, onPick }: Props) {
-  const categories = useMemo(() => paletteCategories(ctx, layerCount), [ctx, layerCount]);
+export function KeycodePalette({ ctx, layerCount, macroCount, disabled, mac, onPick }: Props) {
+  const categories = useMemo(() => paletteCategories(ctx, layerCount, macroCount), [ctx, layerCount, macroCount]);
   const [active, setActive] = useState('basic');
   const [query, setQuery] = useState('');
   const [anyText, setAnyText] = useState('');

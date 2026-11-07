@@ -1,17 +1,20 @@
 import { useEffect, useMemo, useState } from 'react';
 import { askConfirm } from '../../app/confirm';
 import { useSettings } from '../../app/useSettings';
+import { useUi } from '../../app/useUi';
 import { KeyboardCanvas } from '../../components/KeyboardCanvas';
 import { macLabel } from '../../components/labels';
 import { defaultChoices, visibleKeys } from '../../core/definition/layout';
 import type { PhysicalKey } from '../../core/definition/types';
 import { describeKeycode, hex4 } from '../../core/keycodes';
 import { appStore, definition, useApp } from '../../state/app';
+import type { AssignResult } from '../../state/store';
 import { keycodeContext } from '../../state/store';
 import { KeycodePalette } from './KeycodePalette';
 
 const keys = visibleKeys(definition, defaultChoices(definition));
 const cols = definition.matrix.cols;
+const encoderIndexes = [...new Set(definition.keys.flatMap((k) => (k.encoder === null ? [] : [k.encoder])))].sort((a, b) => a - b);
 
 export function KeymapView() {
   const keymap = useApp((s) => s.keymap);
@@ -21,6 +24,10 @@ export function KeymapView() {
   const writable = useApp((s) => s.writable);
   const busy = useApp((s) => s.busy);
   const customBase = useApp((s) => s.customBase);
+  const encoders = useApp((s) => s.encoders);
+  const macroCount = useApp((s) => s.macroCount);
+  const pending = useUi((s) => s.pending);
+  const encoderTarget = useUi((s) => s.encoderTarget);
   const mac = useSettings((s) => s.macLabels);
   const coords = useSettings((s) => s.showCoords);
   const dev = useSettings((s) => s.devMode);
@@ -29,6 +36,7 @@ export function KeymapView() {
   const ctx = useMemo(() => keycodeContext(definition, customBase), [customBase]);
   const selectedSet = useMemo(() => new Set(selected), [selected]);
   const codeAt = (k: PhysicalKey): number => keymap[layer]?.[k.row * cols + k.col] ?? 0;
+  const labelOf = (code: number): string => macLabel(describeKeycode(code, ctx).label, mac);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
@@ -43,6 +51,8 @@ export function KeymapView() {
         void appStore.getState().redo();
       } else if (e.key === 'Escape') {
         appStore.getState().select([]);
+        useUi.getState().setEncoderTarget(null);
+        useUi.getState().setPending(null);
       }
     };
     window.addEventListener('keydown', onKey);
@@ -51,23 +61,38 @@ export function KeymapView() {
 
   const assign = async (code: number): Promise<void> => {
     setHint(null);
-    let res = await appStore.getState().assignKeycode(code);
+    const target = useUi.getState().encoderTarget;
+    const run = (confirmed: boolean): Promise<AssignResult> =>
+      target
+        ? appStore.getState().assignEncoder(target.index, target.clockwise, code, { confirmed })
+        : appStore.getState().assignKeycode(code, { confirmed });
+    let res = await run(false);
     if (!res.ok && res.reason === 'danger') {
       const ok = await askConfirm({ title: 'Keycode berisiko', message: res.message, confirmLabel: 'Tetap pasang', danger: true });
       if (!ok) return;
-      res = await appStore.getState().assignKeycode(code, { confirmed: true });
+      res = await run(true);
     }
     if (!res.ok) setHint(res.message);
   };
 
   const onKeyClick = (k: PhysicalKey, e: React.MouseEvent): void => {
     setHint(null);
+    const ui = useUi.getState();
+    ui.setEncoderTarget(null);
+    if (ui.pending) {
+      const p = ui.pending;
+      ui.setPending(null);
+      appStore.getState().select([k.index]);
+      void assign(p.code);
+      return;
+    }
     if (e.shiftKey || e.ctrlKey || e.metaKey) appStore.getState().toggleSelect(k.index);
     else appStore.getState().select([k.index]);
   };
 
   const one = selected.length === 1 ? definition.keys[selected[0] as number] : undefined;
   const oneDesc = one ? describeKeycode(codeAt(one), ctx) : null;
+  const canPick = writable && !busy && (selected.length > 0 || encoderTarget !== null);
 
   return (
     <section>
@@ -76,6 +101,17 @@ export function KeymapView() {
         Klik tombol di kanvas, lalu pilih keycode. Shift atau Ctrl + klik memilih beberapa tombol. Perubahan langsung ditulis ke keyboard dan bisa
         diurungkan dengan Ctrl+Z.
       </p>
+
+      {pending && (
+        <div className="banner" role="status">
+          <span>
+            Klik tombol di kanvas untuk memasang <b>{pending.label}</b> pada layer {layer}.
+          </span>
+          <button type="button" className="btn" onClick={() => useUi.getState().setPending(null)}>
+            Batal
+          </button>
+        </div>
+      )}
 
       <div className="row">
         <span>Layer</span>
@@ -94,7 +130,7 @@ export function KeymapView() {
         width={definition.width}
         height={definition.height}
         label="Kanvas keymap"
-        legend={(k) => macLabel(describeKeycode(codeAt(k), ctx).label, mac)}
+        legend={(k) => labelOf(codeAt(k))}
         title={(k) => describeKeycode(codeAt(k), ctx).title}
         keyClass={(k) => {
           const kind = describeKeycode(codeAt(k), ctx).kind;
@@ -106,12 +142,20 @@ export function KeymapView() {
       />
 
       <div className="detail" aria-live="polite">
-        {selected.length === 0 && <span>Belum ada tombol terpilih.</span>}
+        {selected.length === 0 && !encoderTarget && <span>Belum ada tombol terpilih.</span>}
+        {encoderTarget && (
+          <span>
+            Tujuan: putaran knob {encoderTarget.index} ({encoderTarget.clockwise ? 'searah jarum jam' : 'berlawanan jarum jam'}) pada layer {layer}.
+          </span>
+        )}
         {selected.length > 1 && <span>{selected.length} tombol terpilih. Keycode yang dipilih akan dipasang ke semuanya.</span>}
         {one && oneDesc && (
           <>
             <span>
-              Matriks <b>{one.row},{one.col}</b>
+              Matriks{' '}
+              <b>
+                {one.row},{one.col}
+              </b>
             </span>
             <span>
               Keycode <b>{oneDesc.label}</b>
@@ -122,7 +166,7 @@ export function KeymapView() {
               </span>
             )}
             <span>{oneDesc.title}</span>
-            {one.encoder !== null && <span>Tombol knob: hanya tekanannya yang bisa diubah di versi ini.</span>}
+            {one.encoder !== null && <span>Ini tombol tekan knob. Putarannya diatur di kartu Putaran knob di bawah.</span>}
           </>
         )}
       </div>
@@ -138,7 +182,45 @@ export function KeymapView() {
         </div>
       )}
 
-      <KeycodePalette ctx={ctx} layerCount={layerCount} disabled={!writable || busy || selected.length === 0} mac={mac} onPick={(c) => void assign(c)} />
+      {encoderIndexes.length > 0 && (
+        <div className="card">
+          <h3>Putaran knob</h3>
+          {encoders === null ? (
+            <p className="fine">Firmware ini tidak mengizinkan membaca atau mengubah putaran knob. Hanya tekanannya yang bisa diubah.</p>
+          ) : (
+            encoderIndexes.map((i) => (
+              <div className="row" key={i}>
+                <span>
+                  Knob {i}, layer {layer}
+                </span>
+                {[false, true].map((cw) => {
+                  const code = encoders[layer]?.[i]?.[cw ? 1 : 0] ?? 0;
+                  const active = encoderTarget?.index === i && encoderTarget.clockwise === cw;
+                  return (
+                    <button
+                      key={String(cw)}
+                      type="button"
+                      className="btn"
+                      aria-pressed={active}
+                      disabled={!writable || busy}
+                      title={describeKeycode(code, ctx).title}
+                      onClick={() => {
+                        useUi.getState().setEncoderTarget(active ? null : { index: i, clockwise: cw });
+                        if (!active) appStore.getState().select([]);
+                      }}
+                    >
+                      {cw ? 'Searah jarum jam' : 'Berlawanan'}: <b>{labelOf(code)}</b>
+                    </button>
+                  );
+                })}
+              </div>
+            ))
+          )}
+          {encoderTarget && <p className="fine">Pilih keycode di palet untuk memasangnya pada putaran yang dipilih.</p>}
+        </div>
+      )}
+
+      <KeycodePalette ctx={ctx} layerCount={layerCount} macroCount={macroCount} disabled={!canPick} mac={mac} onPick={(c) => void assign(c)} />
     </section>
   );
 }

@@ -1,24 +1,28 @@
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { ConnectScreen } from '../components/ConnectScreen';
 import { isWebHidSupported } from '../core/transport/webhid';
 import { BackupView } from '../features/backup/BackupView';
+import { FunctionsView } from '../features/functions/FunctionsView';
 import { KeymapView } from '../features/keymap/KeymapView';
 import { LightingView } from '../features/lighting/LightingView';
+import { MacroView } from '../features/macros/MacroView';
 import { SettingsView } from '../features/settings/SettingsView';
+import { TesterView } from '../features/tester/TesterView';
 import { appStore, useApp } from '../state/app';
 import { ConfirmHost } from './confirm';
+import { useUi } from './useUi';
+import type { Tab } from './useUi';
 import { applyTheme, useSettings } from './useSettings';
-
-type Tab = 'keymap' | 'lighting' | 'backup' | 'settings';
 
 const TABS: { id: Tab; label: string }[] = [
   { id: 'keymap', label: 'Keymap' },
   { id: 'lighting', label: 'Lighting' },
+  { id: 'functions', label: 'Fungsi Gen 75' },
+  { id: 'macros', label: 'Makro' },
+  { id: 'tester', label: 'Tester' },
   { id: 'backup', label: 'Backup' },
   { id: 'settings', label: 'Setelan' },
 ];
-
-const COMING_SOON = ['Fungsi Gen 75', 'Makro', 'Tester'];
 
 const STATUS_TEXT = {
   idle: 'belum terhubung',
@@ -27,6 +31,25 @@ const STATUS_TEXT = {
   error: 'gagal menyambung',
   disconnected: 'terputus',
 } as const;
+
+function viewFor(tab: Tab) {
+  switch (tab) {
+    case 'keymap':
+      return <KeymapView />;
+    case 'lighting':
+      return <LightingView />;
+    case 'functions':
+      return <FunctionsView />;
+    case 'macros':
+      return <MacroView />;
+    case 'tester':
+      return <TesterView />;
+    case 'backup':
+      return <BackupView />;
+    case 'settings':
+      return <SettingsView />;
+  }
+}
 
 export default function App() {
   const status = useApp((s) => s.status);
@@ -40,7 +63,7 @@ export default function App() {
   const canUndo = useApp((s) => s.past.length > 0);
   const canRedo = useApp((s) => s.future.length > 0);
   const theme = useSettings((s) => s.theme);
-  const [tab, setTab] = useState<Tab>('keymap');
+  const tab = useUi((s) => s.tab);
 
   useEffect(() => {
     applyTheme(theme);
@@ -65,6 +88,10 @@ export default function App() {
   }, [tab]);
 
   useEffect(() => {
+    if (status !== 'ready') useUi.getState().resetDeviceState();
+  }, [status]);
+
+  useEffect(() => {
     const flush = (): void => void appStore.getState().flushLighting();
     window.addEventListener('pagehide', flush);
     return () => window.removeEventListener('pagehide', flush);
@@ -72,10 +99,7 @@ export default function App() {
 
   const ready = status === 'ready';
   const act = appStore.getState();
-
-  let view = <ConnectScreen />;
-  if (tab === 'settings') view = <SettingsView />;
-  else if (ready) view = tab === 'keymap' ? <KeymapView /> : tab === 'lighting' ? <LightingView /> : <BackupView />;
+  const view = tab === 'settings' || ready ? viewFor(tab) : <ConnectScreen />;
 
   return (
     <div className="app">
@@ -108,13 +132,8 @@ export default function App() {
       <div className="main">
         <nav aria-label="Bagian aplikasi">
           {TABS.map((t) => (
-            <button key={t.id} type="button" aria-current={tab === t.id ? 'page' : undefined} onClick={() => setTab(t.id)}>
+            <button key={t.id} type="button" aria-current={tab === t.id ? 'page' : undefined} onClick={() => useUi.getState().setTab(t.id)}>
               {t.label}
-            </button>
-          ))}
-          {COMING_SOON.map((l) => (
-            <button key={l} type="button" disabled title="Dikerjakan di fase berikutnya">
-              {l} <span className="tag">segera</span>
             </button>
           ))}
         </nav>
