@@ -1,0 +1,856 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Gen75 Studio: Prototipe</title>
+<style>
+:root{
+  --bg:#0e1015; --panel:#161922; --panel2:#1d212c; --line:#2a2f3c; --text:#e8eaf0; --muted:#9aa1b4;
+  --accent:#ff7a1a; --accent-ink:#1a0e00; --ok:#3ddc97; --warn:#ffcc4d; --bad:#ff6b78; --info:#62bcff;
+  --keytext:#14161c; --r:10px;
+}
+@media (prefers-color-scheme: light){
+  :root:not([data-theme="dark"]){
+    --bg:#f3f4f8; --panel:#ffffff; --panel2:#eceef4; --line:#d6dae4; --text:#161922; --muted:#586078;
+    --accent:#d95c00; --accent-ink:#ffffff; --ok:#12805a; --warn:#8a5a00; --bad:#c42b3a; --info:#1363b0;
+  }
+}
+:root[data-theme="light"]{
+  --bg:#f3f4f8; --panel:#ffffff; --panel2:#eceef4; --line:#d6dae4; --text:#161922; --muted:#586078;
+  --accent:#d95c00; --accent-ink:#ffffff; --ok:#12805a; --warn:#8a5a00; --bad:#c42b3a; --info:#1363b0;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--text);font:14px/1.5 system-ui,"Segoe UI",Roboto,sans-serif}
+button,select,input{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.app{display:grid;grid-template-rows:auto 1fr;min-height:100vh}
+.top{display:flex;flex-wrap:wrap;gap:10px 14px;align-items:center;padding:10px 16px;border-bottom:1px solid var(--line);background:var(--panel)}
+.brand{font-weight:700;letter-spacing:.2px}
+.brand b{color:var(--accent)}
+.pill{display:inline-flex;gap:6px;align-items:center;padding:3px 10px;border:1px solid var(--line);border-radius:999px;background:var(--panel2);font-size:12px;color:var(--muted)}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--warn)}
+.sp{flex:1}
+.btn{background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:5px 12px;cursor:pointer}
+.btn:hover:not(:disabled){border-color:var(--accent)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.btn.pri{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);font-weight:600}
+.btn.bad{border-color:var(--bad);color:var(--bad)}
+.main{display:grid;grid-template-columns:176px minmax(0,1fr);min-height:0}
+.main>div{min-width:0}
+.boardwrap{min-width:0}
+nav{border-right:1px solid var(--line);background:var(--panel);padding:10px 8px;display:flex;flex-direction:column;gap:2px}
+nav button{text-align:left;background:none;border:0;border-radius:8px;padding:8px 12px;cursor:pointer;color:var(--muted)}
+nav button:hover{background:var(--panel2);color:var(--text)}
+nav button[aria-selected="true"]{background:var(--panel2);color:var(--text);box-shadow:inset 3px 0 0 var(--accent)}
+.view{display:none;padding:16px;min-width:0}
+.view.on{display:block}
+h2{font-size:16px;margin:0 0 4px}
+h3{font-size:13px;margin:0 0 8px;color:var(--muted);text-transform:uppercase;letter-spacing:.6px}
+p.hint{margin:0 0 12px;color:var(--muted);max-width:78ch}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:14px;margin-bottom:14px}
+.row{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;margin-bottom:10px}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.seg button{background:var(--panel2);border:0;border-right:1px solid var(--line);padding:5px 14px;cursor:pointer}
+.seg button:last-child{border-right:0}
+.seg button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink);font-weight:600}
+label.chk{display:inline-flex;gap:6px;align-items:center;color:var(--muted);cursor:pointer}
+.boardwrap{overflow-x:auto;padding:4px 0}
+.board{position:relative;--u:44px;margin:4px 0}
+.key{position:absolute;border:0;padding:0;border-radius:6px;color:var(--keytext);font-weight:600;font-size:11px;line-height:1.1;display:flex;align-items:center;justify-content:center;text-align:center;overflow:hidden;
+  left:calc(var(--u) * var(--x));top:calc(var(--u) * var(--y));width:calc(var(--u) * var(--w) - 4px);height:calc(var(--u) * var(--h) - 4px);
+  box-shadow:inset 0 -3px 0 rgba(0,0,0,.28)}
+button.key{cursor:pointer}
+.key small{position:absolute;left:3px;bottom:1px;font-size:8px;font-weight:500;opacity:.65}
+.key.knob{border-radius:50%}
+.key.sel{outline:3px solid var(--accent);outline-offset:1px;z-index:2}
+.key.hit{background:var(--ok)!important}
+.key.custom{box-shadow:inset 0 -3px 0 rgba(0,0,0,.28), inset 0 0 0 2px var(--info)}
+.pv .key{background:hsl(var(--h) calc(var(--s) * 1%) 56%);color:#000;opacity:calc(.12 + .88 * var(--b))}
+.pv.off .key{background:#2b2f3a;opacity:1}
+.pv.cyc .key{animation:cyc 6s linear infinite}
+.pv.brt .key{animation:brt 3s ease-in-out infinite}
+@keyframes cyc{to{filter:hue-rotate(360deg)}}
+@keyframes brt{50%{opacity:.12}}
+@media (prefers-reduced-motion: reduce){.pv.cyc .key,.pv.brt .key{animation:none}}
+.detail{display:flex;flex-wrap:wrap;gap:6px 18px;color:var(--muted);font-size:13px;margin:6px 0 12px}
+.detail b{color:var(--text)}
+.ptabs{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px}
+.ptabs button{background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:4px 12px;cursor:pointer}
+.ptabs button[aria-selected="true"]{border-color:var(--accent);color:var(--accent)}
+.pgrid{display:flex;flex-wrap:wrap;gap:6px}
+.kc{min-width:42px;height:36px;padding:0 8px;background:var(--panel2);border:1px solid var(--line);border-radius:8px;cursor:pointer}
+.kc:hover{border-color:var(--accent)}
+.kc.c{border-color:var(--info)}
+.banner{display:flex;gap:10px;align-items:center;background:color-mix(in srgb,var(--accent) 16%,var(--panel));border:1px solid var(--accent);border-radius:8px;padding:8px 12px;margin-bottom:10px}
+.note{border-left:3px solid var(--warn);background:var(--panel2);padding:8px 12px;border-radius:0 8px 8px 0;color:var(--muted);margin:0 0 12px;max-width:80ch}
+.note.bad{border-color:var(--bad)}
+fieldset{border:1px solid var(--line);border-radius:var(--r);padding:12px 14px;margin:0 0 12px}
+legend{padding:0 6px;color:var(--muted)}
+.ctl{display:grid;grid-template-columns:140px minmax(160px,320px) 90px;gap:8px 12px;align-items:center;margin-bottom:8px}
+.ctl input[type=range]{width:100%;accent-color:var(--accent)}
+.ctl select{background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:5px 8px;width:100%}
+.val{color:var(--muted);font-variant-numeric:tabular-nums}
+.grid2{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:10px}
+.fn{display:flex;flex-direction:column;gap:6px;background:var(--panel2);border:1px solid var(--line);border-radius:var(--r);padding:10px 12px}
+.fn.danger{border-color:var(--bad)}
+.fn b{font-size:15px}
+.fn span{color:var(--muted);font-size:12.5px;flex:1}
+.slots{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px}
+.slots button{width:46px;height:34px;background:var(--panel2);border:1px solid var(--line);border-radius:8px;cursor:pointer}
+.slots button[aria-pressed="true"]{border-color:var(--accent);color:var(--accent)}
+.act{display:grid;grid-template-columns:110px 1fr auto;gap:8px;margin-bottom:6px;align-items:center}
+.act select,.act input,.in{background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:5px 8px;width:100%}
+.bar{height:8px;background:var(--panel2);border-radius:999px;overflow:hidden;border:1px solid var(--line)}
+.bar i{display:block;height:100%;background:var(--accent)}
+pre{background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:10px;overflow:auto;max-height:260px;font:12px/1.5 ui-monospace,Consolas,monospace;margin:0 0 10px}
+.toast{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);background:var(--panel);border:1px solid var(--accent);padding:8px 16px;border-radius:999px;opacity:0;pointer-events:none;transition:opacity .2s}
+.toast.on{opacity:1}
+.stat{display:flex;gap:18px;flex-wrap:wrap;margin-bottom:10px}
+.stat div{background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:6px 12px}
+.stat b{font-size:18px}
+@media (max-width:760px){
+  .main{grid-template-columns:minmax(0,1fr)}
+  nav{flex-direction:row;overflow-x:auto;border-right:0;border-bottom:1px solid var(--line)}
+  nav button{white-space:nowrap}
+  .ctl{grid-template-columns:1fr}
+  .act{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <span class="brand">Gen75 <b>Studio</b></span>
+    <span class="pill"><span class="dot" aria-hidden="true"></span><span id="status">Prototipe · tidak terhubung ke keyboard</span></span>
+    <span class="pill" id="devpill"></span>
+    <span class="sp"></span>
+    <button class="btn" id="undo" disabled aria-label="Urungkan">↶ Undo</button>
+    <button class="btn" id="redo" disabled aria-label="Ulangi">↷ Redo</button>
+  </header>
+  <div class="main">
+    <nav role="tablist" aria-label="Bagian aplikasi" id="nav"></nav>
+    <div>
+      <!-- KEYMAP -->
+      <section class="view on" id="v-keymap" role="tabpanel">
+        <h2>Keymap</h2>
+        <p class="hint">Pilih tombol di kanvas, lalu klik keycode di palet. Layout digambar dari definisi JSON (bukan gambar statis). Label tombol adalah contoh; aplikasi nyata membaca keymap dari perangkat.</p>
+        <div id="banner"></div>
+        <div class="row">
+          <span>Layer</span>
+          <div class="seg" id="layers" role="group" aria-label="Layer"></div>
+          <label class="chk"><input type="checkbox" id="optMac"> Label Mac</label>
+          <label class="chk"><input type="checkbox" id="optCoord"> Koordinat matriks</label>
+        </div>
+        <div class="boardwrap"><div class="board" id="board" aria-label="Kanvas keyboard"></div></div>
+        <div class="detail" id="detail"></div>
+        <div class="card">
+          <div class="ptabs" id="ptabs" role="tablist" aria-label="Kategori keycode"></div>
+          <div class="pgrid" id="pgrid"></div>
+        </div>
+      </section>
+
+      <!-- LIGHTING -->
+      <section class="view" id="v-light" role="tabpanel">
+        <h2>Lighting</h2>
+        <p class="hint">Menu di bawah dibangun otomatis dari bagian <code>menus</code> pada JSON: tipe kontrol, rentang, daftar efek, dan aturan <code>showIf</code> semuanya dibaca dari definisi. Pratinjau disederhanakan.</p>
+        <div class="card">
+          <div class="boardwrap"><div class="board pv" id="pvboard" aria-label="Pratinjau lampu"></div></div>
+        </div>
+        <div id="menus"></div>
+      </section>
+
+      <!-- FUNGSI -->
+      <section class="view" id="v-fn" role="tabpanel">
+        <h2>Fungsi Gen 75</h2>
+        <p class="hint">11 keycode khas Gen 75 dari definisi. Di VIA standar keycode ini hanya berupa label; di sini disertai penjelasan dan pemasangan satu klik ke tombol.</p>
+        <div class="note">Konfigurasi hanya lewat kabel USB. Pindah mode (2.4G/BLE/USB) dilakukan dengan menekan tombol yang dipasangi keycode di keyboard; app tidak bisa "menekannya" dari layar karena protokol VIA tidak punya perintah itu.</div>
+        <div id="fngroups"></div>
+        <div class="card">
+          <h3>Status perangkat</h3>
+          <div class="stat"><div>Mode aktif <b>-</b></div><div>Baterai <b>-</b></div></div>
+          <div class="note bad">Belum tersedia: protokol VIA standar tidak punya perintah baca mode/baterai. Aktif hanya jika firmware menyediakannya (lihat RANCANGAN.md §9.7).</div>
+        </div>
+      </section>
+
+      <!-- MAKRO -->
+      <section class="view" id="v-macro" role="tabpanel">
+        <h2>Makro</h2>
+        <p class="hint">Jumlah slot dan ukuran memori sebenarnya dibaca dari perangkat; angka di sini contoh.</p>
+        <div class="slots" id="slots" role="group" aria-label="Slot makro"></div>
+        <div class="card">
+          <h3 id="mtitle">Makro M0</h3>
+          <div id="acts"></div>
+          <div class="row">
+            <button class="btn" data-add="tap">+ Tap</button>
+            <button class="btn" data-add="down">+ Tahan</button>
+            <button class="btn" data-add="up">+ Lepas</button>
+            <button class="btn" data-add="delay">+ Jeda</button>
+            <button class="btn" data-add="text">+ Teks</button>
+            <button class="btn" disabled title="Perekam memakai event keyboard; tidak ada di prototipe">● Rekam</button>
+          </div>
+          <div class="row"><span class="val" id="mem"></span><div class="bar" style="width:220px"><i id="membar"></i></div></div>
+        </div>
+      </section>
+
+      <!-- TESTER -->
+      <section class="view" id="v-test" role="tabpanel">
+        <h2>Tester</h2>
+        <p class="hint">Prototipe memakai event keyboard browser. Versi nyata membaca <code>switch_matrix_state</code> dari perangkat sehingga Fn dan knob ikut teruji.</p>
+        <div class="row">
+          <button class="btn pri" id="tstart">Mulai uji</button>
+          <button class="btn" id="treset">Reset</button>
+          <span class="val" id="thint">Saat uji aktif, tombol keyboard tidak memicu fungsi browser.</span>
+        </div>
+        <div class="stat"><div>Teruji <b id="tcount">0</b> / <span id="ttotal"></span></div><div>Tombol terakhir <b id="tlast">-</b></div></div>
+        <div class="boardwrap"><div class="board" id="tboard" aria-label="Kanvas tester"></div></div>
+      </section>
+
+      <!-- BACKUP -->
+      <section class="view" id="v-backup" role="tabpanel">
+        <h2>Backup</h2>
+        <p class="hint">Backup adalah berkas JSON bersekema. Impor menolak berkas yang tidak cocok dengan perangkat (VID/PID, ukuran matriks).</p>
+        <div class="card">
+          <div class="row">
+            <button class="btn pri" id="bdl">Unduh backup</button>
+            <label class="btn" for="bfile">Muat backup...</label>
+            <input type="file" id="bfile" accept="application/json,.json" hidden>
+          </div>
+          <pre id="bpre" aria-label="Pratinjau backup"></pre>
+        </div>
+        <div class="card">
+          <h3>Firmware</h3>
+          <p class="hint" style="margin:0">Pembaruan firmware tidak ada di v1 (Fase 3, hanya bila bootloader teridentifikasi dan jalurnya aman).</p>
+          <button class="btn" disabled>Perbarui firmware</button>
+        </div>
+      </section>
+
+      <!-- SETELAN -->
+      <section class="view" id="v-set" role="tabpanel">
+        <h2>Setelan</h2>
+        <div class="card">
+          <div class="row"><span>Tema</span>
+            <div class="seg" id="themeSeg" role="group" aria-label="Tema">
+              <button data-t="auto" aria-pressed="true">Otomatis</button>
+              <button data-t="dark" aria-pressed="false">Gelap</button>
+              <button data-t="light" aria-pressed="false">Terang</button>
+            </div>
+          </div>
+          <div class="row"><label class="chk"><input type="checkbox" id="optDev"> Mode pengembang (tampilkan keycode hex dan log HID)</label></div>
+          <div class="row"><label class="chk"><input type="checkbox" checked disabled> Kunci perintah berbahaya (selalu aktif)</label></div>
+        </div>
+      </section>
+    </div>
+  </div>
+</div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script type="application/json" id="def">{
+	"name": "GEN 75",
+	"vendorId": "0x36B0",
+	"productId": "0x3077",
+	"keycodes": ["qmk_rgb_matrix_keycodes"],
+	"menus":
+	[
+		{
+			"label": "Lighting",
+			"content":
+			[
+				{
+					"label": "Backlight",
+					"content":
+					[
+						{
+							"label": "Brightness",
+							"type": "range",
+							"options": [0, 160],
+							"content": ["id_qmk_rgb_matrix_brightness", 3, 1]
+						},
+						{
+							"label": "Effect",
+							"type": "dropdown",
+							"content": ["id_qmk_rgb_matrix_effect", 3, 2],
+							"options":
+							[
+								[ "none", 0 ],
+								[ "solid_color", 1 ],
+								[ "alphas_mods", 2 ],
+								[ "gradient_up_down", 3 ],
+								[ "gradient_left_right", 4 ],
+								[ "breathing", 5 ],
+								[ "band_sat", 6 ],
+								[ "band_val", 7 ],
+								[ "band_pinwheel_sat", 8 ],
+								[ "band_pinwheel_val", 9 ],
+								[ "band_spiral_sat", 10 ],
+								[ "band_spiral_val", 11 ],
+								[ "cycle_all", 12 ],
+								[ "cycle_left_right", 13 ],
+								[ "cycle_up_down", 14 ],
+								[ "cycle_out_in", 15 ],
+								[ "cycle_out_in_dual", 16 ],
+								[ "rainbow_moving_chevron", 17 ],
+								[ "cycle_pinwheel", 18 ],
+								[ "cycle_spiral", 19 ],
+								[ "dual_beacon", 20 ],
+								[ "rainbow_beacon", 21 ],
+								[ "rainbow_pinwheels", 22 ],
+								[ "flower_blooming", 23 ],
+								[ "raindrops", 24 ],
+								[ "jellybean_raindrops", 25 ],
+								[ "hue_breathing", 26 ],
+								[ "hue_pendulum", 27 ],
+								[ "hue_wave", 28 ],
+								[ "pixel_flow", 29 ],
+								[ "digital_rain", 30 ],
+								[ "solid_reactive", 31 ],
+								[ "solid_reactive_wide", 32 ],
+								[ "solid_reactive_multiwide", 33 ],
+								[ "solid_reactive_cross", 34 ],
+								[ "solid_reactive_multicross", 35 ],
+								[ "solid_reactive_nexus", 36 ],
+								[ "solid_reactive_multinexus", 37 ],
+								[ "splash", 38 ],
+								[ "multisplash", 39 ],
+								[ "solid_splash", 40 ],
+								[ "solid_multisplash", 41 ],
+								[ "starlight", 42 ],
+								[ "starlight_dual_hue", 43 ],
+								[ "starlight_dual_sat", 44 ],
+								[ "riverflow", 45 ]
+							]
+						},
+						{
+							"showIf": "{id_qmk_rgb_matrix_effect} != 0",
+							"label": "Effect Speed",
+							"type": "range",
+							"options": [0, 255],
+							"content": ["id_qmk_rgb_matrix_effect_speed", 3, 3]
+						},
+						{
+							"showIf": "{id_qmk_rgb_matrix_effect} != 0 && {id_qmk_rgb_matrix_effect} != 24 && {id_qmk_rgb_matrix_effect} != 28 && {id_qmk_rgb_matrix_effect} != 29 && {id_qmk_rgb_matrix_effect} != 32",
+							"label": "Color",
+							"type": "color",
+							"content": ["id_qmk_rgb_matrix_color", 3, 4]
+						}
+					]
+				}
+			]
+		}
+	],
+	"customKeycodes": [
+		{"name": "2.4G",     "title": "Set to 2.4G working mode",                "shortName": "MD_24G"},
+		{"name": "BLE1",     "title": "Set to Bluetooth Channel 1 working mode", "shortName": "MD_BLE1"},
+		{"name": "BLE2",     "title": "Set to Bluetooth Channel 2 working mode", "shortName": "MD_BLE2"},
+		{"name": "BLE3",     "title": "Set to Bluetooth Channel 3 working mode", "shortName": "MD_BLE3"},
+		{"name": "USB",	     "title": "Set to USB working mode",                 "shortName": "MD_USB"},
+		{"name": "BAT",      "title": "Querying Battery Status",                 "shortName": "QK_BAT"},
+		{"name": "WLO",      "title": "Lock WIN",                                "shortName": "QK_WLO"},
+		{"name": "SIX_N",    "title": "Full-key six-key switch",                 "shortName": "SIX_N" },
+		{"name": "FN_ALT",   "title": "Switch multimedia function keys",         "shortName": "FN_A_MODE"},
+		{"name": "RTOG",     "title": "Toggle led lighting on or off",           "shortName": "RGB_RTOG" },
+		{"name": "U_EE_CLR", "title": "Customize the reset button",              "shortName": "U_EE_CLR" }
+	],
+	"matrix": { "rows": 6, "cols": 16 },
+    "layouts": {
+		"labels": [
+            "Caps Lock"
+		],
+		"keymap": [
+			[
+				{ "c":"#777777" },
+				{ "w":1.0,  "h":1.0,  "x":0.0 },  "0,0",
+                { "c":"#cccccc" },
+				{ "w":1.0,  "h":1.0,  "x":0.25},  "0,1",
+				{ "w":1.0,  "h":1.0,  "x":0.0 },  "0,2",
+				{ "w":1.0,  "h":1.0,  "x":0.0 },  "0,3",
+				{ "w":1.0,  "h":1.0,  "x":0.0 },  "0,4",
+				{ "w":1.0,  "h":1.0,  "x":0.25},  "0,5",
+				{ "w":1.0,  "h":1.0,  "x":0.0 },  "0,6",
+				{ "w":1.0,  "h":1.0,  "x":0.0 },  "0,7",
+				{ "w":1.0,  "h":1.0,  "x":0.0 },  "0,8",
+				{ "w":1.0,  "h":1.0,  "x":0.25},  "0,9",
+				{ "w":1.0,  "h":1.0,  "x":0.0 },  "0,10",
+				{ "w":1.0,  "h":1.0,  "x":0.0 },  "0,11",
+				{ "w":1.0,  "h":1.0,  "x":0.0 },  "0,12",
+				{ "w":1.0,  "h":1.0,  "x":0.25},  "2,14",
+				{"c": "#777777","w": 1.0, "h": 1.0, "x":0.2, "fa": [1,0,0,0,0,0,0,0,0,1]},
+                "0,15\n\n\n\n\n\n\n\n\n e0 "
+			],
+
+			[
+				{ "c":"#cccccc" },
+				{ "w":1.0,  "h":1.0,  "x":0.0,  "y":0.25 },  "1,0",
+				{ "c":"#aaaaaa" },
+				{ "w":1.0,  "h":1.0,  "x":0.0 },  "1,1",
+				{ "w":1.0,  "h":1.0,  "x":0.0 },  "1,2",
+				{ "w":1.0,  "h":1.0,  "x":0.0 },  "1,3",
+				{ "w":1.0,  "h":1.0,  "x":0.0 },  "1,4",
+				{ "w":1.0,  "h":1.0,  "x":0.0 },  "1,5",
+				{ "w":1.0,  "h":1.0,  "x":0.0 },  "1,6",
+				{ "w":1.0,  "h":1.0,  "x":0.0 },  "1,7",
+				{ "w":1.0,  "h":1.0,  "x":0.0 },  "1,8",
+				{ "w":1.0,  "h":1.0,  "x":0.0 },  "1,9",
+				{ "w":1.0,  "h":1.0,  "x":0.0 },  "1,10",
+				{ "w":1.0,  "h":1.0,  "x":0.0 },  "1,11",
+				{ "w":1.0,  "h":1.0,  "x":0.0 },  "1,12",
+				{ "c":"#cccccc" },
+				{ "w":2.0,  "h":1.0,  "x":0.0 },  "1,13",
+				{ "c":"#cccccc" },
+				{ "w":1.0,  "h":1.0,  "x":0.5 },  "2,15"
+			],
+
+			[
+                { "c":"#cccccc" },
+				{ "w":1.5,  "h":1.0,  "x":0.0 },  "2,0",
+                { "c":"#aaaaaa" },
+				{ "w":1.0,  "h":1.0,  "x":0.0 },  "2,1",
+				{ "w":1.0,  "h":1.0,  "x":0.0 },  "2,2",
+				{ "w":1.0,  "h":1.0,  "x":0.0 },  "2,3",
+				{ "w":1.0,  "h":1.0,  "x":0.0 },  "2,4",
+				{ "w":1.0,  "h":1.0,  "x":0.0 },  "2,5",
+				{ "w":1.0,  "h":1.0,  "x":0.0 },  "2,6",
+				{ "w":1.0,  "h":1.0,  "x":0.0 },  "2,7",
+				{ "w":1.0,  "h":1.0,  "x":0.0 },  "2,8",
+				{ "w":1.0,  "h":1.0,  "x":0.0 },  "2,9",
+				{ "w":1.0,  "h":1.0,  "x":0.0 },  "2,10",
+				{ "w":1.0,  "h":1.0,  "x":0.0 },  "2,11",
+				{ "w":1.0,  "h":1.0,  "x":0.0 },  "2,12",
+				{ "c":"#cccccc" },
+				{ "w":1.5,  "h":1.0,  "x":0.0 },  "2,13",
+                { "c":"#cccccc" },
+				{ "w":1.0,  "h":1.0,  "x":0.5 },  "3,14"
+			],
+
+			[
+                { "c":"#cccccc" },
+				{ "w":1.75, "h":1.0,  "x":0.0 },  "3,0\n\n\n0,0",
+                { "c":"#aaaaaa" },
+				{ "w":1.0,  "h":1.0,  "x":0.0 },  "3,1",
+				{ "w":1.0,  "h":1.0,  "x":0.0 },  "3,2",
+				{ "w":1.0,  "h":1.0,  "x":0.0 },  "3,3",
+				{ "w":1.0,  "h":1.0,  "x":0.0 },  "3,4",
+				{ "w":1.0,  "h":1.0,  "x":0.0 },  "3,5",
+				{ "w":1.0,  "h":1.0,  "x":0.0 },  "3,6",
+				{ "w":1.0,  "h":1.0,  "x":0.0 },  "3,7",
+				{ "w":1.0,  "h":1.0,  "x":0.0 },  "3,8",
+				{ "w":1.0,  "h":1.0,  "x":0.0 },  "3,9",
+				{ "w":1.0,  "h":1.0,  "x":0.0 },  "3,10",
+				{ "w":1.0,  "h":1.0,  "x":0.0 },  "3,11",
+                { "c":"#777777" },
+				{ "w":2.25, "h":1.0,  "x":0.0 },  "3,13",
+                { "c":"#cccccc" },
+				{ "w":1.0,  "h":1.0,  "x":0.5 },  "3,15"
+			],
+			[
+				{ "c":"#cccccc" },
+                { "w":2.25, "h":1.0,  "x":0.0 },  "4,0",
+                { "c":"#aaaaaa" },
+				{ "w":1.0,  "h":1.0,  "x":0.0 },  "4,2",
+				{ "w":1.0,  "h":1.0,  "x":0.0 },  "4,3",
+				{ "w":1.0,  "h":1.0,  "x":0.0 },  "4,4",
+				{ "w":1.0,  "h":1.0,  "x":0.0 },  "4,5",
+				{ "w":1.0,  "h":1.0,  "x":0.0 },  "4,6",
+				{ "w":1.0,  "h":1.0,  "x":0.0 },  "4,7",
+				{ "w":1.0,  "h":1.0,  "x":0.0 },  "4,8",
+				{ "w":1.0,  "h":1.0,  "x":0.0 },  "4,9",
+				{ "w":1.0,  "h":1.0,  "x":0.0 },  "4,10",
+				{ "w":1.0,  "h":1.0,  "x":0.0 },  "4,11",
+                { "c":"#cccccc" },
+                { "w":1.75,  "h":1.0,  "x":0.0 }, "4,13",
+				{ "c":"#777777" },
+				{ "w":1.0 ,  "h":1.0,  "x":0.25, "y":0.25 }, "4,14",
+                { "c":"#cccccc" },
+				{ "w":1.0,   "h":1.0,  "x":0.25, "y":-0.25 }, "4,15"
+			],
+
+			[
+				{ "c":"#cccccc" },
+				{ "w":1.25,	"h":1.0,  "x":0.0 },  "5,0",
+				{ "w":1.25,	"h":1.0,  "x":0.0 },  "5,1",
+				{ "w":1.25,	"h":1.0,  "x":0.0 },  "5,2",
+                { "c":"#aaaaaa" },
+				{ "w":6.25,	"h":1.0,  "x":0.0 },  "5,5",
+                { "c":"#cccccc" },
+				{ "w":1.0,	"h":1.0,  "x":0.0 },  "5,9",
+				{ "w":1.0,	"h":1.0,  "x":0.0 },  "5,10",
+				{ "w":1.0,	"h":1.0,  "x":0.0 },  "5,12",
+				{ "c":"#777777" },
+				{ "w":1.0,	"h":1.0,  "x":0.25, "y":0.25 },  "5,13",
+				{ "w":1.0,	"h":1.0,  "x":0.0 },  "5,14",
+				{ "w":1.0,	"h":1.0,  "x":0.0 },  "5,15"
+			]
+		]
+	}
+}</script>
+<script>
+(()=>{
+"use strict";
+const $=s=>document.querySelector(s);
+const el=(t,props={},...kids)=>{const e=document.createElement(t);for(const[k,v]of Object.entries(props)){if(k==='class')e.className=v;else if(k==='text')e.textContent=v;else if(k.startsWith('on'))e.addEventListener(k.slice(2),v);else e.setAttribute(k,v);}for(const c of kids)e.append(c);return e;};
+const toast=(m)=>{const t=$('#toast');t.textContent=m;t.classList.add('on');clearTimeout(toast.t);toast.t=setTimeout(()=>t.classList.remove('on'),2200);};
+
+/* ===== Definisi (JSON milik pengguna, disisipkan apa adanya) ===== */
+const DEF=JSON.parse($('#def').textContent);
+
+/* ===== Parser KLE minimal: (x,y,w,h,warna) + posisi matriks ===== */
+function parseKLE(km){
+  let y=0;const out=[];
+  for(const row of km){
+    let x=0,w=1,h=1,c='#cccccc';
+    for(const it of row){
+      if(typeof it==='object'){ if(it.x)x+=it.x; if(it.y)y+=it.y; if(it.w!==undefined)w=it.w; if(it.h!==undefined)h=it.h; if(it.c)c=it.c; }
+      else{
+        const p=it.split('\n'); const[r,cl]=p[0].split(',').map(Number);
+        out.push({r,c:cl,x,y,w,h,color:c,opt:p[3]||null,enc:(p[9]||'').trim()});
+        x+=w;w=1;h=1;
+      }
+    }
+    y+=1;
+  }
+  return out;
+}
+const KEYS=parseKLE(DEF.layouts.keymap);
+const MAXX=Math.max(...KEYS.map(k=>k.x+k.w)), MAXY=Math.max(...KEYS.map(k=>k.y+k.h));
+const KNOB=KEYS.findIndex(k=>k.enc!=='');
+
+/* ===== Kode default (urutan = urutan kemunculan di KLE) ===== */
+const F=Array.from({length:12},(_,i)=>'F'+(i+1));
+const CODES=[
+ 'Escape',...F,'Delete','Knob',
+ 'Backquote',...'1234567890'.split('').map(d=>'Digit'+d),'Minus','Equal','Backspace','PageUp',
+ 'Tab',...'QWERTYUIOP'.split('').map(l=>'Key'+l),'BracketLeft','BracketRight','Backslash','PageDown',
+ 'CapsLock',...'ASDFGHJKL'.split('').map(l=>'Key'+l),'Semicolon','Quote','Enter','Home',
+ 'ShiftLeft',...'ZXCVBNM'.split('').map(l=>'Key'+l),'Comma','Period','Slash','ShiftRight','ArrowUp','End',
+ 'ControlLeft','MetaLeft','AltLeft','Space','AltRight','Fn','ControlRight','ArrowLeft','ArrowDown','ArrowRight'
+];
+const NM={Escape:'Esc',Backquote:'`',Minus:'-',Equal:'=',Backspace:'⌫',BracketLeft:'[',BracketRight:']',Backslash:'\\',CapsLock:'Caps',Semicolon:';',Quote:"'",ShiftLeft:'Shift',ShiftRight:'Shift',Comma:',',Period:'.',Slash:'/',ControlLeft:'Ctrl',ControlRight:'Ctrl',MetaLeft:'Win',AltLeft:'Alt',AltRight:'Alt',Space:'Space',Fn:'MO(1)',ArrowUp:'↑',ArrowDown:'↓',ArrowLeft:'←',ArrowRight:'→',PageUp:'PgUp',PageDown:'PgDn',Delete:'Del',Knob:'Knob'};
+const nm=c=>NM[c]??c.replace(/^Key|^Digit/,'');
+const CUSTOM=DEF.customKeycodes.map(k=>k.name);
+
+/* ===== State ===== */
+const NL=4;
+const L0=CODES.map(nm);
+const L1=CODES.map(()=>'▽');
+['Br−','Br+','⏮','⏯','⏭','Mute','Vol−','Vol+'].forEach((v,i)=>L1[1+i]=v);
+[CUSTOM[1],CUSTOM[2],CUSTOM[3],CUSTOM[0],CUSTOM[4]].forEach((v,i)=>L1[16+i]=v);
+L1[13]=CUSTOM[9]; L1[CODES.indexOf('KeyB')]=CUSTOM[5];
+const state={
+  layer:0, sel:null, pending:null, tab:'keymap', palette:'Dasar',
+  layers:[L0,L1,CODES.map(()=>'▽'),CODES.map(()=>'▽')],
+  undo:[], redo:[],
+  light:{id_qmk_rgb_matrix_brightness:128,id_qmk_rgb_matrix_effect:12,id_qmk_rgb_matrix_effect_speed:128,id_qmk_rgb_matrix_color:[10,255]},
+  macros:Array.from({length:16},()=>[]), macro:0,
+  mac:false, coord:false, dev:false
+};
+state.macros[0]=[{t:'down',v:'Ctrl'},{t:'tap',v:'C'},{t:'up',v:'Ctrl'}];
+state.macros[1]=[{t:'text',v:'halo@contoh.id'},{t:'tap',v:'Enter'}];
+
+/* ===== Kanvas ===== */
+const macLabel=l=>state.mac?({Win:'Cmd',Alt:'Opt'}[l]??l):l;
+function drawBoard(host,mode){
+  host.innerHTML='';
+  host.style.height=`calc(var(--u) * ${MAXY})`;
+  host.style.width=`calc(var(--u) * ${MAXX})`;
+  KEYS.forEach((k,i)=>{
+    const isBtn=mode==='keymap';
+    const b=el(isBtn?'button':'div',{class:'key'+(i===KNOB?' knob':'')});
+    b.style.setProperty('--x',k.x);b.style.setProperty('--y',k.y);b.style.setProperty('--w',k.w);b.style.setProperty('--h',k.h);
+    b.style.background=k.color;
+    b.dataset.i=i;
+    if(mode==='keymap'){
+      const lab=state.layers[state.layer][i];
+      b.append(macLabel(lab));
+      if(CUSTOM.includes(lab))b.classList.add('custom');
+      if(state.sel===i)b.classList.add('sel');
+      b.setAttribute('aria-label',`Tombol ${k.r},${k.c}: ${lab}`);
+      b.setAttribute('aria-pressed',state.sel===i?'true':'false');
+      b.addEventListener('click',()=>onKey(i));
+    } else if(mode==='test'){
+      b.append(nm(CODES[i]));
+    }
+    if(state.coord&&mode!=='preview')b.append(el('small',{text:`${k.r},${k.c}`}));
+    host.append(b);
+  });
+  fit(host);
+}
+function fit(host){
+  const w=host.parentElement.clientWidth-8;
+  const u=Math.max(26,Math.min(54,Math.floor(w/MAXX)));
+  host.style.setProperty('--u',u+'px');
+}
+addEventListener('resize',()=>document.querySelectorAll('.board').forEach(fit));
+
+function onKey(i){
+  if(state.pending!==null){assign(i,state.pending);state.pending=null;renderBanner();return;}
+  state.sel=i;renderKeymap();
+}
+function assign(i,val,silent){
+  const L=state.layers[state.layer];
+  if(L[i]===val)return;
+  state.undo.push({layer:state.layer,i,old:L[i],nu:val});
+  if(state.undo.length>50)state.undo.shift();
+  state.redo=[];L[i]=val;
+  renderKeymap();syncUndo();
+  if(!silent)toast(`Tombol ${KEYS[i].r},${KEYS[i].c} → ${val}`);
+}
+function syncUndo(){$('#undo').disabled=!state.undo.length;$('#redo').disabled=!state.redo.length;}
+$('#undo').onclick=()=>{const a=state.undo.pop();if(!a)return;state.layers[a.layer][a.i]=a.old;state.redo.push(a);state.layer=a.layer;renderKeymap();syncUndo();};
+$('#redo').onclick=()=>{const a=state.redo.pop();if(!a)return;state.layers[a.layer][a.i]=a.nu;state.undo.push(a);state.layer=a.layer;renderKeymap();syncUndo();};
+addEventListener('keydown',e=>{
+  if(state.tab!=='keymap'||!(e.ctrlKey||e.metaKey))return;
+  if(e.key==='z'){e.preventDefault();$('#undo').click();}
+  if(e.key==='y'){e.preventDefault();$('#redo').click();}
+});
+
+/* ===== Keymap view ===== */
+const PAL={
+  'Dasar':[...'ABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890'.split(''),...F,'Esc','Tab','Enter','⌫','Space','Del','Caps','Shift','Ctrl','Alt','Win','←','↑','↓','→','Home','End','PgUp','PgDn','-','=','[',']','\\',';',"'",'`',',','.','/'],
+  'Layer':['MO(1)','MO(2)','MO(3)','TG(1)','TG(2)','TO(0)','TT(1)','DF(0)','▽','✕'],
+  'Media':['Mute','Vol+','Vol−','⏯','⏭','⏮','Br+','Br−'],
+  'Gen 75':CUSTOM,
+  'Lampu':['RM_TOGG','RM_NEXT','RM_PREV','RM_HUEU','RM_HUED','RM_VALU','RM_VALD','RM_SPDU','RM_SPDD'],
+  'Makro':Array.from({length:16},(_,i)=>'M'+i)
+};
+function renderKeymap(){
+  const seg=$('#layers');seg.innerHTML='';
+  for(let i=0;i<NL;i++)seg.append(el('button',{'aria-pressed':String(i===state.layer),text:String(i),onclick:()=>{state.layer=i;renderKeymap();}}));
+  drawBoard($('#board'),'keymap');
+  const d=$('#detail');d.innerHTML='';
+  if(state.sel===null){d.append(el('span',{text:'Belum ada tombol terpilih.'}));}
+  else{
+    const k=KEYS[state.sel],lab=state.layers[state.layer][state.sel];
+    const ci=CUSTOM.indexOf(lab);
+    d.append(el('span',{},'Matriks ',el('b',{text:`${k.r},${k.c}`})),el('span',{},'Posisi ',el('b',{text:`x ${k.x} · y ${k.y} · ${k.w}u`})),el('span',{},'Keycode ',el('b',{text:lab})));
+    if(ci>=0)d.append(el('span',{text:`${DEF.customKeycodes[ci].title}${state.dev?` · CUSTOM(${ci}) ≈ 0x${(0x7E00+ci).toString(16).toUpperCase()} (protokol 12, perlu verifikasi)`:''}`}));
+    if(state.sel===KNOB)d.append(el('span',{text:'Tombol knob: hanya tekan; putaran bergantung dukungan encoder firmware (lihat RANCANGAN.md §2 #3).'}));
+  }
+  const pt=$('#ptabs');pt.innerHTML='';
+  for(const k of Object.keys(PAL))pt.append(el('button',{role:'tab','aria-selected':String(k===state.palette),text:k,onclick:()=>{state.palette=k;renderKeymap();}}));
+  const pg=$('#pgrid');pg.innerHTML='';
+  PAL[state.palette].forEach(v=>{
+    const ci=CUSTOM.indexOf(v);
+    const b=el('button',{class:'kc'+(ci>=0?' c':''),text:v,title:ci>=0?DEF.customKeycodes[ci].title:v});
+    b.onclick=()=>{
+      if(state.sel===null){toast('Pilih tombol di kanvas terlebih dahulu');return;}
+      assign(state.sel,v);
+    };
+    pg.append(b);
+  });
+}
+function renderBanner(){
+  const b=$('#banner');b.innerHTML='';
+  if(state.pending!==null){
+    b.append(el('div',{class:'banner'},el('span',{},'Klik tombol di kanvas untuk memasang ',el('b',{text:state.pending}),` pada layer ${state.layer}.`),el('button',{class:'btn',text:'Batal',onclick:()=>{state.pending=null;renderBanner();}})));
+  }
+}
+
+/* ===== Lighting (menu v3 + showIf) ===== */
+function evalIf(expr){
+  const s=expr.replace(/\{(\w+)\}/g,(_,id)=>{const v=state.light[id];return Array.isArray(v)?v[0]:v;});
+  /* Prototipe: validasi karakter lalu Function. Produksi: parser ekspresi sendiri (RANCANGAN.md §8.3). */
+  if(!/^[\d\s!=&|<>()]+$/.test(s))return true;
+  try{return !!Function('"use strict";return ('+s+')')();}catch{return true;}
+}
+const hsv2css=(h,s)=>({h:Math.round(h/255*360),s:Math.round(s/255*100)});
+function rgb2hsv(r,g,b){r/=255;g/=255;b/=255;const m=Math.max(r,g,b),n=Math.min(r,g,b),d=m-n;let h=0;if(d){if(m===r)h=((g-b)/d)%6;else if(m===g)h=(b-r)/d+2;else h=(r-g)/d+4;h*=60;if(h<0)h+=360;}return[Math.round(h/360*255),Math.round((m?d/m:0)*255)];}
+function hsv2hex(h,s){const H=h/255*360,S=s/255,V=1;const c=V*S,x=c*(1-Math.abs((H/60)%2-1)),m=V-c;let r=0,g=0,b=0;if(H<60)[r,g,b]=[c,x,0];else if(H<120)[r,g,b]=[x,c,0];else if(H<180)[r,g,b]=[0,c,x];else if(H<240)[r,g,b]=[0,x,c];else if(H<300)[r,g,b]=[x,0,c];else[r,g,b]=[c,0,x];return'#'+[r,g,b].map(v=>Math.round((v+m)*255).toString(16).padStart(2,'0')).join('');}
+function control(it){
+  const id=it.content[0];const row=el('div',{class:'ctl'});
+  const lab=el('label',{text:it.label});row.append(lab);
+  const val=el('span',{class:'val'});
+  if(it.type==='range'){
+    const[lo,hi]=it.options;const inp=el('input',{type:'range',min:lo,max:hi,value:state.light[id],'aria-label':it.label});
+    val.textContent=`${state.light[id]} / ${hi}`;
+    inp.oninput=()=>{state.light[id]=+inp.value;val.textContent=`${inp.value} / ${hi}`;paintPreview();};
+    row.append(inp,val);
+  }else if(it.type==='dropdown'){
+    const sel=el('select',{'aria-label':it.label});
+    it.options.forEach(([n,v])=>sel.append(el('option',{value:v,text:n.replace(/_/g,' ')})));
+    sel.value=state.light[id];
+    sel.onchange=()=>{state.light[id]=+sel.value;renderMenus();};
+    row.append(sel,val);val.textContent=`id ${state.light[id]}`;
+  }else if(it.type==='color'){
+    const[h,s]=state.light[id];
+    const inp=el('input',{type:'color',value:hsv2hex(h,s),'aria-label':it.label});
+    val.textContent=`H ${h} · S ${s}`;
+    inp.oninput=()=>{const r=parseInt(inp.value.slice(1,3),16),g=parseInt(inp.value.slice(3,5),16),b=parseInt(inp.value.slice(5,7),16);const[hh,ss]=rgb2hsv(r,g,b);state.light[id]=[hh,ss];val.textContent=`H ${hh} · S ${ss}`;paintPreview();};
+    row.append(inp,val);
+  }
+  return row;
+}
+function renderMenus(){
+  const root=$('#menus');root.innerHTML='';
+  const walk=(items,parent)=>{
+    for(const it of items){
+      if(it.showIf&&!evalIf(it.showIf))continue;
+      if(Array.isArray(it.content)&&typeof it.content[0]==='object'){
+        const g=el('fieldset',{},el('legend',{text:it.label}));parent.append(g);walk(it.content,g);
+      }else parent.append(control(it));
+    }
+  };
+  DEF.menus.forEach(m=>walk([m],root));
+  const eff=DEF.menus[0].content[0].content.find(c=>c.type==='dropdown').options.find(o=>o[1]===state.light.id_qmk_rgb_matrix_effect);
+  root.append(el('p',{class:'hint',text:`Efek aktif: ${eff?eff[0]:'?'} · ${DEF.menus[0].content[0].content.find(c=>c.type==='dropdown').options.length-1} efek (+ opsi none) tersedia di definisi.`}));
+  paintPreview();
+}
+function paintPreview(){
+  const pv=$('#pvboard');
+  if(!pv.children.length)drawBoard(pv,'preview');
+  const L=state.light,max=DEF.menus[0].content[0].content.find(c=>c.type==='range').options[1];
+  const[h,s]=L.id_qmk_rgb_matrix_color,c=hsv2css(h,s);
+  pv.style.setProperty('--h',c.h);pv.style.setProperty('--s',c.s);pv.style.setProperty('--b',L.id_qmk_rgb_matrix_brightness/max);
+  const en=DEF.menus[0].content[0].content.find(x=>x.type==='dropdown').options.find(o=>o[1]===L.id_qmk_rgb_matrix_effect)?.[0]||'';
+  pv.classList.toggle('off',en==='none');
+  pv.classList.toggle('cyc',/^(cycle|rainbow|hue)/.test(en));
+  pv.classList.toggle('brt',en==='breathing');
+  pv.querySelectorAll('.key').forEach(k=>k.style.background='');
+}
+
+/* ===== Fungsi Gen 75 ===== */
+const GROUPS=[
+  ['Mode koneksi',['2.4G','BLE1','BLE2','BLE3','USB']],
+  ['Fungsi',['BAT','WLO','SIX_N','FN_ALT','RTOG']],
+  ['Berbahaya',['U_EE_CLR']]
+];
+const EXPL={
+  '2.4G':'Pindah ke mode dongle 2.4G.',BLE1:'Pindah ke slot Bluetooth 1.',BLE2:'Pindah ke slot Bluetooth 2.',BLE3:'Pindah ke slot Bluetooth 3.',USB:'Pindah ke mode kabel USB.',
+  BAT:'Menampilkan status baterai (kemungkinan lewat LED).',WLO:'Kunci/buka tombol Windows.',SIX_N:'Diduga: tukar 6KRO dan NKRO.',FN_ALT:'Diduga: tukar baris F dan fungsi media.',RTOG:'Hidupkan/matikan lampu.',
+  U_EE_CLR:'Diduga: reset pengaturan/EEPROM. Jangan dipasang di tombol yang mudah tertekan.'
+};
+function renderFn(){
+  const root=$('#fngroups');root.innerHTML='';
+  GROUPS.forEach(([title,names])=>{
+    const card=el('div',{class:'card'},el('h3',{text:title}));
+    const g=el('div',{class:'grid2'});
+    names.forEach(n=>{
+      const ck=DEF.customKeycodes.find(k=>k.name===n);
+      const danger=n==='U_EE_CLR';
+      g.append(el('div',{class:'fn'+(danger?' danger':'')},
+        el('b',{text:ck.name}),el('span',{text:`${EXPL[n]} (definisi: "${ck.title}")`}),
+        el('button',{class:'btn'+(danger?' bad':''),text:danger?'Pasang (butuh konfirmasi)...':'Pasang ke tombol...',onclick:()=>{
+          if(danger&&!confirm('U_EE_CLR kemungkinan menghapus pengaturan keyboard. Pasang hanya jika yakin. Lanjutkan?'))return;
+          state.pending=n;setTab('keymap');renderBanner();
+        }})));
+    });
+    card.append(g);root.append(card);
+  });
+}
+
+/* ===== Makro ===== */
+const MCAP=1024;
+function macroBytes(m){return m.reduce((a,x)=>a+(x.t==='text'?x.v.length:x.t==='delay'?3+String(x.v).length:3),0)+1;}
+function renderMacro(){
+  const s=$('#slots');s.innerHTML='';
+  for(let i=0;i<16;i++)s.append(el('button',{'aria-pressed':String(i===state.macro),text:'M'+i,onclick:()=>{state.macro=i;renderMacro();}}));
+  $('#mtitle').textContent='Makro M'+state.macro;
+  const a=$('#acts');a.innerHTML='';
+  const m=state.macros[state.macro];
+  if(!m.length)a.append(el('p',{class:'hint',text:'Makro kosong. Tambahkan aksi di bawah.'}));
+  m.forEach((x,i)=>{
+    const sel=el('select',{'aria-label':'Jenis aksi'});
+    [['tap','Tap'],['down','Tahan'],['up','Lepas'],['delay','Jeda (ms)'],['text','Teks']].forEach(([v,t])=>sel.append(el('option',{value:v,text:t})));
+    sel.value=x.t;sel.onchange=()=>{x.t=sel.value;renderMacro();};
+    const inp=el('input',{value:x.v,'aria-label':'Nilai aksi'});inp.oninput=()=>{x.v=inp.value;memBar();};
+    a.append(el('div',{class:'act'},sel,inp,el('button',{class:'btn',text:'Hapus','aria-label':'Hapus aksi',onclick:()=>{m.splice(i,1);renderMacro();}})));
+  });
+  memBar();
+}
+function memBar(){
+  const tot=state.macros.reduce((a,m)=>a+macroBytes(m),0);
+  $('#mem').textContent=`Memori makro: ${tot} / ${MCAP} B (contoh)`;
+  $('#membar').style.width=Math.min(100,tot/MCAP*100)+'%';
+}
+document.querySelectorAll('[data-add]').forEach(b=>b.onclick=()=>{
+  const t=b.dataset.add;state.macros[state.macro].push({t,v:t==='delay'?'100':t==='text'?'teks':'A'});renderMacro();
+});
+
+/* ===== Tester ===== */
+const tst={on:false,hit:new Set()};
+const TESTABLE=CODES.filter(c=>c!=='Fn'&&c!=='Knob');
+function renderTest(){
+  drawBoard($('#tboard'),'test');
+  [...$('#tboard').children].forEach((k,i)=>{if(tst.hit.has(CODES[i]))k.classList.add('hit');});
+  $('#tcount').textContent=[...tst.hit].filter(c=>TESTABLE.includes(c)).length;
+  $('#ttotal').textContent=TESTABLE.length;
+  $('#tstart').textContent=tst.on?'Hentikan uji':'Mulai uji';
+}
+$('#tstart').onclick=()=>{tst.on=!tst.on;renderTest();};
+$('#treset').onclick=()=>{tst.hit.clear();$('#tlast').textContent='-';renderTest();};
+addEventListener('keydown',e=>{
+  if(state.tab!=='test'||!tst.on)return;
+  e.preventDefault();
+  const i=CODES.indexOf(e.code);
+  $('#tlast').textContent=e.code;
+  if(i<0)return;
+  tst.hit.add(e.code);renderTest();
+});
+
+/* ===== Backup ===== */
+function backupObj(){
+  const hex=v=>'0x'+v.toString(16).toUpperCase().padStart(4,'0');
+  return{
+    schemaVersion:1,app:'Gen75 Studio (prototipe)',createdAt:new Date().toISOString(),
+    device:{name:DEF.name,vendorId:DEF.vendorId,productId:DEF.productId,matrix:DEF.matrix,protocolVersion:null},
+    keymap:{layers:state.layers},
+    macros:state.macros.map(a=>({actions:a})),
+    lighting:state.light
+  };
+}
+function renderBackup(){
+  const s=JSON.stringify(backupObj(),null,1);
+  $('#bpre').textContent=s.length>2400?s.slice(0,2400)+'\n... (dipotong untuk pratinjau)':s;
+}
+$('#bdl').onclick=()=>{
+  const blob=new Blob([JSON.stringify(backupObj(),null,2)],{type:'application/json'});
+  const a=el('a',{href:URL.createObjectURL(blob),download:'gen75-backup.json'});
+  document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+  toast('Backup diunduh');
+};
+$('#bfile').onchange=async e=>{
+  const f=e.target.files[0];if(!f)return;
+  try{
+    const o=JSON.parse(await f.text());
+    if(o.schemaVersion!==1)throw new Error('schemaVersion tidak dikenal');
+    if(String(o.device?.vendorId).toLowerCase()!==String(DEF.vendorId).toLowerCase()||String(o.device?.productId).toLowerCase()!==String(DEF.productId).toLowerCase())throw new Error('VID/PID tidak cocok dengan Gen 75');
+    if(o.device?.matrix?.rows!==DEF.matrix.rows||o.device?.matrix?.cols!==DEF.matrix.cols)throw new Error('ukuran matriks berbeda');
+    const L=o.keymap?.layers;
+    if(!Array.isArray(L)||!L.length||L.length>NL||L.some(l=>!Array.isArray(l)||l.length!==KEYS.length))throw new Error(`layer tidak valid (butuh 1-${NL} layer × ${KEYS.length} tombol)`);
+    L.forEach((l,i)=>state.layers[i]=l.map(String));
+    renderKeymap();renderBackup();toast('Backup dimuat ke prototipe');
+  }catch(err){toast('Ditolak: '+err.message);}
+  e.target.value='';
+};
+
+/* ===== Setelan ===== */
+$('#themeSeg').addEventListener('click',e=>{
+  const t=e.target.closest('button');if(!t)return;
+  document.querySelectorAll('#themeSeg button').forEach(b=>b.setAttribute('aria-pressed',String(b===t)));
+  if(t.dataset.t==='auto')document.documentElement.removeAttribute('data-theme');else document.documentElement.dataset.theme=t.dataset.t;
+});
+$('#optMac').onchange=e=>{state.mac=e.target.checked;renderKeymap();};
+$('#optCoord').onchange=e=>{state.coord=e.target.checked;renderKeymap();renderTest();$('#pvboard').innerHTML='';paintPreview();};
+$('#optDev').onchange=e=>{state.dev=e.target.checked;renderKeymap();};
+
+/* ===== Navigasi ===== */
+const TABS=[['keymap','Keymap'],['light','Lighting'],['fn','Fungsi Gen 75'],['macro','Makro'],['test','Tester'],['backup','Backup'],['set','Setelan']];
+function setTab(t){
+  state.tab=t;
+  TABS.forEach(([k])=>$('#v-'+k).classList.toggle('on',k===t));
+  $('#nav').querySelectorAll('button').forEach(b=>b.setAttribute('aria-selected',String(b.dataset.t===t)));
+  if(t==='keymap')renderKeymap();
+  if(t==='light'){renderMenus();}
+  if(t==='test')renderTest();
+  if(t==='backup')renderBackup();
+  if(t==='macro')renderMacro();
+}
+TABS.forEach(([k,l])=>$('#nav').append(el('button',{role:'tab','data-t':k,text:l,onclick:()=>setTab(k)})));
+
+/* ===== Init ===== */
+$('#devpill').textContent=`${DEF.name} · ${DEF.vendorId.replace('0x','')}:${DEF.productId.replace('0x','')} · ${DEF.matrix.rows}×${DEF.matrix.cols} · ${KEYS.length} posisi`;
+renderFn();setTab('keymap');
+})();
+</script>
+</body>
+</html>
