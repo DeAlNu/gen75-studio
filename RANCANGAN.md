@@ -228,34 +228,36 @@ flowchart TB
 
 ### 8.1 Tumpukan teknologi
 
-| Lapisan | Pilihan | Alasan |
+| Lapisan | Rencana | Dipakai di Fase 1 |
 |---|---|---|
-| Bahasa | TypeScript (strict) | protokol biner rawan salah; tipe membantu |
-| Build | Vite + `vite-plugin-pwa` | cepat; PWA/offline |
-| UI | React 18, Tailwind CSS, Radix UI | komponen aksesibel siap pakai (Svelte/Solid juga layak) |
-| State | Zustand | sederhana untuk state perangkat + undo stack |
-| Validasi | zod | skema backup/definisi |
-| Penyimpanan | `idb` (IndexedDB) | snapshot dan profil lokal |
-| Uji | Vitest, Playwright | unit dan E2E dengan perangkat tiruan |
-| i18n | i18next | ID/EN |
+| Bahasa | TypeScript (strict) | sama; protokol biner rawan salah, tipe membantu |
+| Build | Vite + `vite-plugin-pwa` | Vite saja; PWA/offline ditunda ke Fase 2 |
+| UI | React 18, Tailwind CSS, Radix UI | React 18 dengan CSS biasa dan elemen HTML bawaan (`dialog`, `fieldset`); cukup untuk skala ini |
+| State | Zustand | sama (`zustand/vanilla` agar store bisa diuji tanpa DOM) |
+| Validasi | zod | validasi manual di `backup.ts` dan `definition/`, dengan pesan galat berbahasa Indonesia |
+| Penyimpanan | `idb` (IndexedDB) | IndexedDB langsung; jatuh ke memori bila tidak tersedia |
+| Uji | Vitest, Playwright | Vitest untuk inti dan store, dengan perangkat simulasi; E2E Playwright belum |
+| i18n | i18next | belum; teks masih Bahasa Indonesia saja |
 
 ### 8.2 Struktur repositori
 
 ```
 gen75-studio/
 ├─ src/
-│  ├─ app/            # routing, layout, tema
-│  ├─ features/       # keymap, lighting, device, macros, tester, backup, settings
-│  ├─ core/
-│  │  ├─ transport/   # WebHidTransport, MockTransport
-│  │  ├─ via/         # ViaClient, perintah, antrean, galat
-│  │  ├─ definition/  # gen75.definition.json, kle.ts, menus.ts, showIf.ts
-│  │  ├─ keycodes/    # katalog + codec 16-bit ↔ simbol
-│  │  └─ storage/     # IndexedDB
-│  └─ i18n/
+│  ├─ app/            # App, tema, setelan, dialog konfirmasi, CSS
+│  ├─ components/     # kanvas keyboard, layar sambung
+│  ├─ features/       # keymap, lighting, backup, settings (makro dan tester menyusul)
+│  ├─ state/          # store aplikasi (zustand), instance produksi
+│  └─ core/
+│     ├─ transport/   # WebHID, perangkat simulasi
+│     ├─ via/         # ViaClient, perintah, galat
+│     ├─ definition/  # parser KLE, menu v3, showIf, opsi layout (membaca GEN 75.JSON)
+│     ├─ keycodes/    # katalog dan codec 16-bit
+│     ├─ storage/     # snapshot (IndexedDB atau memori)
+│     └─ session.ts, backup.ts, color.ts
 ├─ tools/probe/       # Fase 0, read-only
-├─ test/              # unit, e2e, fixtures
-└─ docs/
+├─ prototype/         # prototipe UI statis
+└─ test/              # tes unit (Vitest)
 ```
 
 ### 8.3 Keputusan teknis penting
@@ -412,7 +414,7 @@ Aturan impor backup: tolak bila VID/PID berbeda, matriks berbeda, jumlah layer m
 | Fase | Isi | Perkiraan kerja | Kriteria selesai |
 |---|---|---|---|
 | **0: Discovery** | halaman probe read-only di [`tools/probe/`](tools/probe/index.html): versi protokol, jumlah layer, makro, matrix state, custom channel 0, dump mentah. Sudah dibuat dan diuji dengan perangkat simulasi; belum dijalankan pada keyboard asli | 3-5 hari | Capabilities terisi; keputusan F10/F14/F15 final; simulator punya data nyata |
-| **1: MVP** | F01-F09 | 15-20 hari | terhubung, baca 100% keymap, ubah tombol bertahan setelah cabut-colok; backup→restore identik; lighting tersimpan; uji otomatis hijau |
+| **1: MVP** | F01-F09 (F09 lewat palet keycode; panel khusus menyusul di Fase 2) | 15-20 hari | terhubung, baca 100% keymap, ubah tombol bertahan setelah cabut-colok; backup→restore identik; lighting tersimpan; uji otomatis hijau. Status: kerangka selesai dan lolos tes otomatis, build, dan uji browser dengan perangkat simulasi; kriteria cabut-colok dan semua yang menyangkut perangkat nyata belum diuji |
 | **2: Lengkap** | F10, F11, F12, F14, F16, F19 | 12-15 hari | makro round-trip identik; tester memakai matrix state; i18n ID/EN |
 | **3: Lanjutan** | F13, F18, evaluasi flashing/desktop | 15-25 hari | profil tukar-cepat; keputusan go/no-go flashing berdasarkan bootloader |
 
