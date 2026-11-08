@@ -231,7 +231,7 @@ flowchart TB
 | Lapisan | Rencana | Dipakai di Fase 1 |
 |---|---|---|
 | Bahasa | TypeScript (strict) | sama; protokol biner rawan salah, tipe membantu |
-| Build | Vite + `vite-plugin-pwa` | Vite saja; PWA/offline ditunda ke Fase 2 |
+| Build | Vite + `vite-plugin-pwa` | Vite dengan plugin kecil sendiri (`tools/pwa/`) untuk service worker, tanpa `vite-plugin-pwa`; alasannya di 13.2 |
 | UI | React 18, Tailwind CSS, Radix UI | React 18 dengan CSS biasa dan elemen HTML bawaan (`dialog`, `fieldset`); cukup untuk skala ini |
 | State | Zustand | sama (`zustand/vanilla` agar store bisa diuji tanpa DOM) |
 | Validasi | zod | validasi manual di `backup.ts` dan `definition/`, dengan pesan galat berbahasa Indonesia |
@@ -245,8 +245,9 @@ flowchart TB
 gen75-studio/
 ├─ src/
 │  ├─ app/            # App, tema, setelan, dialog konfirmasi, CSS
-│  ├─ components/     # kanvas keyboard, layar sambung
+│  ├─ components/     # kanvas keyboard, layar sambung, pilihan profil, banner pembaruan
 │  ├─ features/       # keymap, lighting, fungsi, makro, tester, profil (+ bandingkan), backup, settings
+│  ├─ pwa/            # status offline, siklus hidup service worker, tawaran pemasangan
 │  ├─ state/          # store aplikasi (zustand), instance produksi
 │  └─ core/
 │     ├─ transport/   # WebHID, perangkat simulasi
@@ -256,6 +257,9 @@ gen75-studio/
 │     ├─ storage/     # snapshot dan profil (IndexedDB v2 atau memori)
 │     └─ session.ts, backup.ts, profiles.ts, compare.ts, macros.ts, matrix.ts, color.ts
 ├─ tools/probe/       # Fase 0, read-only
+├─ tools/pwa/         # templat service worker dan plugin build yang menyisipkan daftar berkas
+├─ tools/icons/       # skrip pembuat ikon (hasilnya di public/)
+├─ public/            # manifest dan ikon
 ├─ prototype/         # prototipe UI statis
 └─ test/              # tes unit (Vitest)
 ```
@@ -432,7 +436,7 @@ Aturan impor backup: tolak bila VID/PID berbeda, matriks berbeda, jumlah layer m
 |---|---|---|---|
 | **0: Discovery** | halaman probe read-only di [`tools/probe/`](tools/probe/index.html): versi protokol, jumlah layer, makro, matrix state, custom channel 0, dump mentah. Sudah dibuat dan diuji dengan perangkat simulasi; belum dijalankan pada keyboard asli | 3-5 hari | Capabilities terisi; keputusan F10/F14/F15 final; simulator punya data nyata |
 | **1: MVP** | F01-F09 (F09 lewat palet keycode; panel khusus menyusul di Fase 2) | 15-20 hari | terhubung, baca 100% keymap, ubah tombol bertahan setelah cabut-colok; backup→restore identik; lighting tersimpan; uji otomatis hijau. Status: kerangka selesai dan lolos tes otomatis, build, dan uji browser dengan perangkat simulasi; kriteria cabut-colok dan semua yang menyangkut perangkat nyata belum diuji |
-| **2: Lengkap** | F10, F11, F12, F14, F16, F19 | 12-15 hari | makro round-trip identik; tester memakai matrix state; i18n ID/EN. Status: F10, F11, F12, dan F14 selesai dan lolos tes otomatis serta uji browser dengan perangkat simulasi. F16 baru sebagian (tema dan label Mac), i18n ID/EN belum. F19 ditunda sampai format simpan/muat VIA bisa diperiksa. PWA offline juga belum. Round-trip makro terhadap makro buatan VIA belum diuji pada perangkat nyata |
+| **2: Lengkap** | F10, F11, F12, F14, F16, F19 | 12-15 hari | makro round-trip identik; tester memakai matrix state; i18n ID/EN. Status: F10, F11, F12, dan F14 selesai dan lolos tes otomatis serta uji browser dengan perangkat simulasi. F16 baru sebagian (tema dan label Mac), i18n ID/EN belum. F19 ditunda sampai format simpan/muat VIA bisa diperiksa. PWA offline selesai setelah Fase 3 (13.2). Round-trip makro terhadap makro buatan VIA belum diuji pada perangkat nyata |
 | **3: Lanjutan** | F13, F18, evaluasi flashing/desktop | 15-25 hari | profil tukar-cepat; keputusan go/no-go flashing berdasarkan bootloader. Status: F13 dan F18 selesai dan lolos tes otomatis serta uji browser dengan perangkat simulasi (tukar profil lewat bilah atas, perbandingan antar profil, migrasi IndexedDB v1 ke v2). Keputusan flashing dan desktop: no-go untuk saat ini, alasannya di 13.1. Belum diuji pada keyboard asli |
 
 Perkiraan di atas kasar (hari kerja efektif satu pengembang) dan akan dikoreksi setelah Fase 0.
@@ -452,7 +456,7 @@ Bukti yang dipakai:
 | Tidak ada firmware sumber dan tidak ada alat update pabrikan yang diketahui, jadi papan yang gagal flash tidak punya jalur pulih yang terbukti | [A] |
 | WebHID tidak bisa berbicara dengan bootloader DFU (kelas USB lain). Flashing dari browser butuh WebUSB dan bootloader berprotokol terbuka | [D] |
 
-Mengapa tidak diteruskan: flashing salah pada papan tanpa jalur pulih yang terbukti bisa mematikan papan secara permanen, sementara semua fitur lain sudah jalan lewat WebHID di Chrome dan Edge. Bungkus desktop (Tauri atau Electron) baru menambah nilai bila ada akses USB non-HID yang dibutuhkan untuk flashing; tanpa itu hanya menambah beban pemasangan dan pembaruan. Bila yang dibutuhkan hanya pemakaian offline, PWA lebih murah dan belum dikerjakan.
+Mengapa tidak diteruskan: flashing salah pada papan tanpa jalur pulih yang terbukti bisa mematikan papan secara permanen, sementara semua fitur lain sudah jalan lewat WebHID di Chrome dan Edge. Bungkus desktop (Tauri atau Electron) baru menambah nilai bila ada akses USB non-HID yang dibutuhkan untuk flashing; tanpa itu hanya menambah beban pemasangan dan pembaruan. Bila yang dibutuhkan hanya pemakaian offline, PWA lebih murah dan sudah dikerjakan (13.2).
 
 Syarat go (semuanya harus terpenuhi):
 
@@ -462,6 +466,36 @@ Syarat go (semuanya harus terpenuhi):
 4. Lisensi firmware mengizinkan (lihat bagian 11, butir 8).
 
 Yang dibutuhkan dari pengguna bila ingin melanjutkan: hasil `tools/probe/` dari keyboard asli, nama dan tautan alat update pabrikan (kalau ada), dan VID:PID saat papan dalam mode bootloader.
+
+### 13.2 PWA dan mode offline
+
+Tujuannya satu: app tetap terbuka dan berguna tanpa internet (G5). Setelah berkas terunduh, app hanya bicara ke keyboard lewat USB, jadi tidak ada fungsi yang butuh jaringan.
+
+Isi:
+
+- `public/manifest.webmanifest` dan ikon (192, 512, maskable, apple-touch, favicon SVG). Ikon dibuat skrip `tools/icons/make-icons.mjs` dari satu definisi geometri dan hasilnya di-commit.
+- `tools/pwa/sw.template.js` dan plugin `tools/pwa/plugin.ts`. Saat `vite build`, plugin memindai `dist/`, menghitung sidik jari isi semua berkas (ditambah templat worker), lalu menulis `dist/sw.js` berisi daftar berkas dan versi. Versi menjadi nama cache: berkas yang berubah menghasilkan cache baru, dan cache lama dihapus saat worker baru aktif.
+- Di halaman: `src/pwa/` (status, siklus hidup, tawaran pemasangan), banner pembaruan, kartu "Aplikasi dan offline" di Setelan, dan penanda offline di bilah atas. Service worker hanya didaftarkan pada build produksi.
+
+Keputusan dan alasannya:
+
+| Keputusan | Alasan |
+|---|---|
+| Service worker ditulis tangan, tanpa `vite-plugin-pwa` dan Workbox | Kebutuhannya kecil (satu daftar berkas, satu cache). Tanpa dependensi baru, seluruh logikanya terbaca dan teruji. Rencana awal di 8.1 memakai plugin itu; diganti. |
+| Versi baru menunggu sampai pengguna memintanya | Muat ulang otomatis bisa memotong penulisan ke keyboard dan menghapus riwayat undo. Tombolnya mati saat store sibuk, dan perubahan lighting yang tertunda ditulis dulu. |
+| Halaman memuat ulang hanya bila pengguna yang meminta | `clients.claim()` pada instalasi pertama juga memicu `controllerchange`; tanpa penjaga halaman memuat ulang sendiri pada kunjungan pertama. |
+| Pencocokan cache memakai `ignoreVary` | Server dev dan sebagian host menjawab `Vary: Origin`, sedangkan skrip modul bertanda `crossorigin` membawa header Origin yang tidak ada saat instalasi. Tanpa opsi ini pencocokan meleset dan halaman kosong saat offline. Ditemukan lewat uji offline sungguhan, bukan lewat tes unit; sekarang ada tes regresi. |
+| Cache yang hilang diisi ulang oleh worker (pesan `HEAL`, dan saat navigasi) | Registrasi bisa hidup lebih lama dari cache-nya: reset dari tab lain, atau dibuang browser. Tanpa ini status "siap offline" menyesatkan. Halaman memeriksa cache versi aktif saat dimuat; bila tidak ada, status turun ke "menyimpan" lalu kembali "siap" atau jadi galat. |
+| Pencarian lewat `caches.match` dengan `cacheName`, bukan `caches.open` | `open` membuat cache kosong, sehingga pemeriksaan "cache ada" selalu lolos. |
+| Tombol "Setel ulang cache offline" | Jalan keluar bila cache bermasalah. Hanya mencabut worker dan menghapus cache berawalan `gen75-studio-`; IndexedDB dan localStorage (profil, snapshot, setelan) tidak disentuh. |
+
+Hosting: WebHID dan service worker sama-sama butuh konteks aman, jadi di luar `localhost` app harus dilayani lewat HTTPS [D]. Belum ada hosting. Hasil build statis di `dist/` bisa diletakkan di host statis mana pun; `base: './'` sudah relatif, jadi subjalur seperti GitHub Pages tidak perlu pengaturan tambahan.
+
+Verifikasi:
+
+- [V] 218 tes unit, 40 di antaranya baru: fungsi plugin (daftar berkas, sidik jari, render templat), worker hasil render dijalankan di sandbox `vm` dengan cache palsu (instalasi, aktivasi, navigasi, `Vary`, pemulihan), dan siklus hidup halaman dengan registrasi palsu. Mutasi sengaja pada worker terdeteksi tes.
+- [V] Uji browser pada `vite preview` di `127.0.0.1`: worker terpasang dan mengontrol halaman; dengan server dimatikan halaman, chunk simulasi, dan Setelan tetap tampil; alur pembaruan (versi menunggu, banner, muat ulang atas permintaan, cache lama terhapus, tanpa muat ulang sendiri); setel ulang cache dengan IndexedDB dan localStorage tetap utuh; cache yang dihapus saat registrasi hidup terisi lagi setelah muat ulang.
+- Belum terbukti: tawaran pemasangan (`beforeinstallprompt`) belum teramati; belum dicoba di host HTTPS sungguhan; WebHID di jendela aplikasi terpasang belum diuji; tampilan banner di lebar ponsel belum dicek; toast "siap dipakai tanpa internet" pada instalasi pertama belum teramati langsung di browser (hanya tercakup tes unit untuk perubahan statusnya).
 
 ---
 

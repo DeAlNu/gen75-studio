@@ -18,8 +18,9 @@ Proyek pribadi, belum ada rilis. Bukan produk resmi pabrikan.
 - **Backup** berkas JSON (keymap, knob, makro, lighting) dan snapshot otomatis di browser; pemulihan menampilkan ringkasan perubahan dulu.
 - Keselamatan: mode baca saja untuk protokol di bawah 12, daftar putih perintah HID, verifikasi baca-ulang setiap tulis, konfirmasi untuk keycode berisiko.
 - Mode simulasi untuk mencoba tanpa keyboard.
+- **Offline (PWA)**: pada hasil build, berkas aplikasi disimpan di browser sehingga app terbuka tanpa internet dan bisa dipasang sebagai aplikasi. Versi baru diunduh di latar dan baru dipakai setelah diminta lewat banner, supaya halaman tidak dimuat ulang di tengah penulisan ke keyboard. Setelan punya tombol periksa pembaruan dan setel ulang cache.
 
-Belum ada: impor dan ekspor format VIA, bahasa Inggris, mode offline (PWA). Pembaruan firmware dan aplikasi desktop sengaja tidak dibuat; alasannya ada di `RANCANGAN.md` bagian 13.1.
+Belum ada: impor dan ekspor format VIA, bahasa Inggris. Pembaruan firmware dan aplikasi desktop sengaja tidak dibuat; alasannya ada di `RANCANGAN.md` bagian 13.1.
 
 ## Menjalankan
 
@@ -40,6 +41,15 @@ npm run typecheck
 npm run build
 ```
 
+Mode offline hanya aktif pada hasil build, dan butuh `localhost`, `127.0.0.1`, atau HTTPS. Untuk mencobanya secara lokal:
+
+```bash
+npm run build
+npm run preview
+```
+
+Buka alamat yang tampil, lalu lihat Setelan bagian "Aplikasi dan offline"; statusnya menjadi "siap dipakai tanpa internet" setelah berkas tersimpan. Selama pengembangan (`npm run dev`) service worker sengaja tidak didaftarkan.
+
 ## Isi repo
 
 | Jalur | Keterangan |
@@ -49,6 +59,9 @@ npm run build
 | `RANCANGAN.md` | rancangan lengkap: fakta perangkat, fitur, UI, arsitektur, protokol, peta jalan |
 | `prototype/index.html` | prototipe UI statis, buka langsung di browser |
 | `tools/probe/` | halaman probe WebHID yang hanya membaca, untuk memeriksa kemampuan firmware |
+| `tools/pwa/` | templat service worker dan plugin build yang menyisipkan daftar berkas serta versi ke `dist/sw.js` |
+| `tools/icons/` | skrip pembuat ikon; hasilnya sudah ada di `public/` |
+| `public/` | manifest aplikasi dan ikon |
 | `GEN 75.JSON` | definisi VIA v3 bawaan pabrikan, dibaca langsung oleh aplikasi |
 
 Berkas firmware pabrikan (`gen75.bin`) sengaja tidak disertakan.
@@ -57,5 +70,6 @@ Berkas firmware pabrikan (`gen75.bin`) sengaja tidak disertakan.
 
 - Inti protokol, store, dan UI sudah jalan dan diuji dengan perangkat simulasi: tes unit, typecheck, build produksi, dan uji manual di browser.
 - Belum pernah dijalankan pada keyboard fisik. Jalankan `tools/probe/` lebih dulu untuk memastikan firmware menjawab sesuai dugaan sebelum menulis apa pun lewat aplikasi ini.
+- Mode offline sudah diuji pada hasil build di `127.0.0.1` (halaman tetap tampil dengan server dimatikan, alur pembaruan, setel ulang cache). Belum dicoba di host HTTPS sungguhan, belum ada hosting, dan tawaran pemasangan serta WebHID di jendela aplikasi terpasang belum diuji.
 - Penulisan hanya dibuka untuk protokol VIA 12 ke atas.
 - Format makro mengikuti dugaan dari QMK dan belum dibandingkan dengan makro buatan VIA pada perangkat nyata.
