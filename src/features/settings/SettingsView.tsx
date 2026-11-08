@@ -1,5 +1,6 @@
 import { useSettings } from '../../app/useSettings';
 import type { Theme } from '../../app/useSettings';
+import { OfflineCard } from './OfflineCard';
 
 const THEMES: [Theme, string][] = [
   ['auto', 'Otomatis'],
@@ -45,6 +46,7 @@ export function SettingsView() {
           </label>
         </div>
       </div>
+      <OfflineCard />
     </section>
   );
 }

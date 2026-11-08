@@ -603,6 +603,11 @@ legend {
   margin-bottom: 10px;
 }
 
+.banner .acts {
+  display: inline-flex;
+  gap: 8px;
+}
+
 .grid2 {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));

@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { ConnectScreen } from '../components/ConnectScreen';
 import { ProfileSwitcher } from '../components/ProfileSwitcher';
+import { PwaBanner } from '../components/PwaBanner';
 import { isWebHidSupported } from '../core/transport/webhid';
 import { BackupView } from '../features/backup/BackupView';
 import { FunctionsView } from '../features/functions/FunctionsView';
@@ -11,6 +12,7 @@ import { CompareView } from '../features/profiles/CompareView';
 import { ProfilesView } from '../features/profiles/ProfilesView';
 import { SettingsView } from '../features/settings/SettingsView';
 import { TesterView } from '../features/tester/TesterView';
+import { pwaStore, usePwa } from '../pwa/status';
 import { appStore, useApp } from '../state/app';
 import { ConfirmHost } from './confirm';
 import { useUi } from './useUi';
@@ -76,6 +78,7 @@ export default function App() {
   const canRedo = useApp((s) => s.future.length > 0);
   const theme = useSettings((s) => s.theme);
   const tab = useUi((s) => s.tab);
+  const online = usePwa((s) => s.online);
 
   useEffect(() => {
     applyTheme(theme);
@@ -84,6 +87,14 @@ export default function App() {
   useEffect(() => {
     void appStore.getState().loadStored();
   }, []);
+
+  useEffect(
+    () =>
+      pwaStore.subscribe((s, prev) => {
+        if (prev.offline === 'installing' && s.offline === 'ready') appStore.setState({ toast: 'Aplikasi siap dipakai tanpa internet.' });
+      }),
+    [],
+  );
 
   useEffect(() => {
     if (!isWebHidSupported()) return;
@@ -127,6 +138,7 @@ export default function App() {
           <span className="dot" aria-hidden="true" />
           {ready ? `${deviceLabel} · protokol ${protocolVersion}` : STATUS_TEXT[status]}
         </span>
+        {!online && <span className="pill warn">offline</span>}
         {ready && simulated && <span className="pill warn">SIMULASI</span>}
         {ready && !writable && <span className="pill warn">BACA SAJA</span>}
         <span className="sp" />
@@ -156,6 +168,7 @@ export default function App() {
         </nav>
 
         <main>
+          <PwaBanner />
           {ready && warnings.length > 0 && (
             <div className="notice" role="status">
               {warnings.map((w) => (
