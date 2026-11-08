@@ -4,6 +4,8 @@ Aplikasi konfigurasi berbasis web untuk keyboard ElecFox Gen 75 (75%, mode kabel
 
 Proyek pribadi, belum ada rilis. Bukan produk resmi pabrikan.
 
+Versi yang sedang berjalan: https://dealnu.github.io/gen75-studio/ (dibuka di Chrome atau Edge; diperbarui otomatis dari `main`).
+
 ## Fitur saat ini
 
 - Sambung lewat WebHID (Chrome atau Edge), sambung otomatis bila perangkat sudah pernah diizinkan.
@@ -62,6 +64,7 @@ Buka alamat yang tampil, lalu lihat Setelan bagian "Aplikasi dan offline"; statu
 | `tools/pwa/` | templat service worker dan plugin build yang menyisipkan daftar berkas serta versi ke `dist/sw.js` |
 | `tools/icons/` | skrip pembuat ikon; hasilnya sudah ada di `public/` |
 | `public/` | manifest aplikasi dan ikon |
+| `.github/workflows/` | CI (typecheck, tes, build) dan deploy ke GitHub Pages |
 | `GEN 75.JSON` | definisi VIA v3 bawaan pabrikan, dibaca langsung oleh aplikasi |
 
 Berkas firmware pabrikan (`gen75.bin`) sengaja tidak disertakan.
@@ -70,6 +73,6 @@ Berkas firmware pabrikan (`gen75.bin`) sengaja tidak disertakan.
 
 - Inti protokol, store, dan UI sudah jalan dan diuji dengan perangkat simulasi: tes unit, typecheck, build produksi, dan uji manual di browser.
 - Belum pernah dijalankan pada keyboard fisik. Jalankan `tools/probe/` lebih dulu untuk memastikan firmware menjawab sesuai dugaan sebelum menulis apa pun lewat aplikasi ini.
-- Mode offline sudah diuji pada hasil build di `127.0.0.1` (halaman tetap tampil dengan server dimatikan, alur pembaruan, setel ulang cache). Belum dicoba di host HTTPS sungguhan, belum ada hosting, dan tawaran pemasangan serta WebHID di jendela aplikasi terpasang belum diuji.
+- Mode offline sudah diuji pada hasil build di `127.0.0.1` (halaman tetap tampil dengan server dimatikan, alur pembaruan, setel ulang cache). Di situs GitHub Pages (HTTPS) sudah terbukti worker aktif dan berkas tersimpan; uji dengan jaringan putus belum dilakukan di sana, dan tawaran pemasangan serta WebHID di jendela aplikasi terpasang belum diuji.
 - Penulisan hanya dibuka untuk protokol VIA 12 ke atas.
 - Format makro mengikuti dugaan dari QMK dan belum dibandingkan dengan makro buatan VIA pada perangkat nyata.

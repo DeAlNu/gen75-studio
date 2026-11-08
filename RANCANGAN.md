@@ -489,13 +489,14 @@ Keputusan dan alasannya:
 | Pencarian lewat `caches.match` dengan `cacheName`, bukan `caches.open` | `open` membuat cache kosong, sehingga pemeriksaan "cache ada" selalu lolos. |
 | Tombol "Setel ulang cache offline" | Jalan keluar bila cache bermasalah. Hanya mencabut worker dan menghapus cache berawalan `gen75-studio-`; IndexedDB dan localStorage (profil, snapshot, setelan) tidak disentuh. |
 
-Hosting: WebHID dan service worker sama-sama butuh konteks aman, jadi di luar `localhost` app harus dilayani lewat HTTPS [D]. Belum ada hosting. Hasil build statis di `dist/` bisa diletakkan di host statis mana pun; `base: './'` sudah relatif, jadi subjalur seperti GitHub Pages tidak perlu pengaturan tambahan.
+Hosting: WebHID dan service worker sama-sama butuh konteks aman, jadi di luar `localhost` app harus dilayani lewat HTTPS [D]. App dilayani lewat GitHub Pages di https://dealnu.github.io/gen75-studio/ (HTTPS dipaksa). Alur kerja `.github/workflows/pages.yml` men-deploy `dist/` setiap push ke `main`, setelah `npm test` dan `npm run build` lolos. Hasil build statis juga bisa diletakkan di host statis mana pun; `base: './'` sudah relatif, jadi subjalur seperti `/gen75-studio/` tidak perlu pengaturan tambahan [V].
 
 Verifikasi:
 
 - [V] 218 tes unit, 40 di antaranya baru: fungsi plugin (daftar berkas, sidik jari, render templat), worker hasil render dijalankan di sandbox `vm` dengan cache palsu (instalasi, aktivasi, navigasi, `Vary`, pemulihan), dan siklus hidup halaman dengan registrasi palsu. Mutasi sengaja pada worker terdeteksi tes.
 - [V] Uji browser pada `vite preview` di `127.0.0.1`: worker terpasang dan mengontrol halaman; dengan server dimatikan halaman, chunk simulasi, dan Setelan tetap tampil; alur pembaruan (versi menunggu, banner, muat ulang atas permintaan, cache lama terhapus, tanpa muat ulang sendiri); setel ulang cache dengan IndexedDB dan localStorage tetap utuh; cache yang dihapus saat registrasi hidup terisi lagi setelah muat ulang.
-- Belum terbukti: tawaran pemasangan (`beforeinstallprompt`) belum teramati; belum dicoba di host HTTPS sungguhan; WebHID di jendela aplikasi terpasang belum diuji; tampilan banner di lebar ponsel belum dicek; toast "siap dipakai tanpa internet" pada instalasi pertama belum teramati langsung di browser (hanya tercakup tes unit untuk perubahan statusnya).
+- [V] Uji browser pada situs Pages (HTTPS): konteks aman, worker aktif dan mengontrol halaman dengan scope `/gen75-studio/`, sepuluh berkas tersimpan di cache, Setelan menampilkan "siap dipakai tanpa internet", manifest terbaca, dan `navigator.hid` tersedia. Uji offline dengan jaringan putus hanya dilakukan pada `127.0.0.1`, belum pada situs Pages.
+- Belum terbukti: tawaran pemasangan (`beforeinstallprompt`) belum teramati; WebHID di jendela aplikasi terpasang belum diuji; tampilan banner di lebar ponsel belum dicek; toast "siap dipakai tanpa internet" pada instalasi pertama belum teramati langsung di browser (hanya tercakup tes unit untuk perubahan statusnya).
 
 ---
 
